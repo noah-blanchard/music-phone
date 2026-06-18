@@ -1,0 +1,13 @@
+# Render blueprint for the MusicPhone Elysia/Bun backend.
+# The Next.js frontend is deployed separately on Vercel (root dir: apps/web).
+services:
+  - type: web
+    name: musicphone-server
+    runtime: node # Render runs the Bun binary via the start command below
+    plan: free
+    buildCommand: bun install
+    startCommand: bun run apps/server/src/index.ts
+    envVars:
+      - key: WEB_ORIGIN
+        sync: false # set to your Vercel URL, e.g. https://musicphone.vercel.app
+      # PORT is injected automatically by Render.

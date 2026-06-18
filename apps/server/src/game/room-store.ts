@@ -1,0 +1,394 @@
+import {
+  DEFAULT_CONFIG,
+  MAX_PLAYERS,
+  MIN_PLAYERS,
+  sanitizeConfig,
+  validateNotes,
+  type GameConfig,
+  type Melody,
+  type Note,
+  type Player,
+  type Room,
+  type ServerMessage,
+} from "@musicphone/shared";
+import { lastMeasureContext, melodyIndexForPlayer } from "./rotation";
+import { toSnapshot } from "./serialize";
+
+type Sender = (msg: ServerMessage) => void;
+
+/** Per-room runtime state that is intentionally NOT part of the serializable Room. */
+interface RoomRuntime {
+  sockets: Map<string, Sender>;
+  /** Notes a player intends to commit this round (set on submit). */
+  pending: Map<string, Note[]>;
+  /** Latest autosaved draft per player (fallback when a round times out). */
+  drafts: Map<string, Note[]>;
+  timer: ReturnType<typeof setTimeout> | null;
+  /** Cleanup timer started when a room becomes empty. */
+  reaper: ReturnType<typeof setTimeout> | null;
+  /** Grace timers per player: a lobby socket close removes the player only if it
+   *  is not cancelled by a reconnect within the grace window. */
+  leaveTimers: Map<string, ReturnType<typeof setTimeout>>;
+}
+
+const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no ambiguous 0/O/1/I
+const EMPTY_ROOM_TTL_MS = 60_000;
+/** Grace window before a lobby player who closed their socket is removed. A
+ *  reconnect within this window (e.g. StrictMode remount) cancels removal. */
+const LEAVE_GRACE_MS = 5_000;
+
+function randomCode(len = 4): string {
+  let out = "";
+  for (let i = 0; i < len; i++) {
+    out += CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)];
+  }
+  return out;
+}
+
+function randomId(): string {
+  return crypto.randomUUID();
+}
+
+export interface CreateResult {
+  room: Room;
+  playerId: string;
+}
+
+/**
+ * Owns all rooms in memory plus their live socket connections and timers.
+ * A single instance is shared by the Elysia app.
+ */
+export class RoomManager {
+  private rooms = new Map<string, Room>();
+  private runtimes = new Map<string, RoomRuntime>();
+
+  /* ------------------------------- Lifecycle ------------------------------ */
+
+  create(hostName: string, config?: Partial<GameConfig>): CreateResult {
+    let code = randomCode();
+    while (this.rooms.has(code)) code = randomCode();
+
+    const hostId = randomId();
+    const host: Player = { id: hostId, name: cleanName(hostName), connected: false, isHost: true };
+    const room: Room = {
+      code,
+      hostId,
+      phase: "lobby",
+      config: { ...DEFAULT_CONFIG, ...sanitizeConfig(config ?? {}, DEFAULT_CONFIG) },
+      players: [host],
+      round: 0,
+      totalRounds: 0,
+      melodies: [],
+      roundEndsAt: 0,
+      ready: {},
+    };
+    this.rooms.set(code, room);
+    this.runtimes.set(code, {
+      sockets: new Map(),
+      pending: new Map(),
+      drafts: new Map(),
+      timer: null,
+      reaper: null,
+      leaveTimers: new Map(),
+    });
+    return { room, playerId: hostId };
+  }
+
+  join(code: string, name: string): CreateResult | { error: string } {
+    const room = this.rooms.get(code);
+    if (!room) return { error: "Room not found" };
+    if (room.phase !== "lobby") return { error: "Game already started" };
+    if (room.players.length >= MAX_PLAYERS) return { error: "Room is full" };
+
+    const playerId = randomId();
+    room.players.push({ id: playerId, name: cleanName(name), connected: false, isHost: false });
+    return { room, playerId };
+  }
+
+  get(code: string): Room | undefined {
+    return this.rooms.get(code);
+  }
+
+  /* ----------------------------- Connections ------------------------------ */
+
+  /** Attach a live socket for a player. Returns false if the player is unknown. */
+  connect(code: string, playerId: string, send: Sender): boolean {
+    const room = this.rooms.get(code);
+    const rt = this.runtimes.get(code);
+    if (!room || !rt) return false;
+    const player = room.players.find((p) => p.id === playerId);
+    if (!player) return false;
+
+    if (rt.reaper) {
+      clearTimeout(rt.reaper);
+      rt.reaper = null;
+    }
+    // Cancel any pending grace removal — this player is back.
+    const leaveTimer = rt.leaveTimers.get(playerId);
+    if (leaveTimer) {
+      clearTimeout(leaveTimer);
+      rt.leaveTimers.delete(playerId);
+    }
+    rt.sockets.set(playerId, send);
+    player.connected = true;
+    return true;
+  }
+
+  /**
+   * A socket closed. This is transient (page reload, React StrictMode remount,
+   * flaky network), so we never remove the player immediately. We mark them
+   * disconnected and, in the lobby, schedule a grace removal that a quick
+   * reconnect cancels. Mid-game the slot is always kept so the melody chain
+   * stays intact.
+   */
+  handleClose(code: string, playerId: string): void {
+    const room = this.rooms.get(code);
+    const rt = this.runtimes.get(code);
+    if (!room || !rt) return;
+
+    rt.sockets.delete(playerId);
+    const player = room.players.find((p) => p.id === playerId);
+    if (player) player.connected = false;
+
+    if (room.phase === "lobby" && player) {
+      if (rt.leaveTimers.has(playerId)) clearTimeout(rt.leaveTimers.get(playerId)!);
+      rt.leaveTimers.set(
+        playerId,
+        setTimeout(() => this.leave(code, playerId), LEAVE_GRACE_MS),
+      );
+    }
+
+    if (rt.sockets.size === 0) this.scheduleReap(code);
+    else this.broadcastSnapshot(code);
+  }
+
+  /**
+   * Explicit, immediate departure (room:leave, or grace expiry in the lobby).
+   * In the lobby the player is fully removed and the host reassigned; mid-game
+   * the slot is kept and the player just marked disconnected.
+   */
+  leave(code: string, playerId: string): void {
+    const room = this.rooms.get(code);
+    const rt = this.runtimes.get(code);
+    if (!room || !rt) return;
+
+    rt.sockets.delete(playerId);
+    const timer = rt.leaveTimers.get(playerId);
+    if (timer) {
+      clearTimeout(timer);
+      rt.leaveTimers.delete(playerId);
+    }
+
+    if (room.phase === "lobby") {
+      room.players = room.players.filter((p) => p.id !== playerId);
+      if (room.players.length > 0 && playerId === room.hostId) {
+        const next = room.players[0]!;
+        next.isHost = true;
+        room.hostId = next.id;
+      }
+    } else {
+      const player = room.players.find((p) => p.id === playerId);
+      if (player) player.connected = false;
+    }
+
+    if (rt.sockets.size === 0) this.scheduleReap(code);
+    else this.broadcastSnapshot(code);
+  }
+
+  private scheduleReap(code: string): void {
+    const rt = this.runtimes.get(code);
+    if (!rt) return;
+    if (rt.reaper) clearTimeout(rt.reaper);
+    rt.reaper = setTimeout(() => this.destroy(code), EMPTY_ROOM_TTL_MS);
+  }
+
+  private destroy(code: string): void {
+    const rt = this.runtimes.get(code);
+    if (rt?.timer) clearTimeout(rt.timer);
+    if (rt?.reaper) clearTimeout(rt.reaper);
+    if (rt) for (const t of rt.leaveTimers.values()) clearTimeout(t);
+    this.rooms.delete(code);
+    this.runtimes.delete(code);
+  }
+
+  /* ------------------------------ Messaging ------------------------------- */
+
+  send(code: string, playerId: string, msg: ServerMessage): void {
+    this.runtimes.get(code)?.sockets.get(playerId)?.(msg);
+  }
+
+  broadcast(code: string, msg: ServerMessage): void {
+    const rt = this.runtimes.get(code);
+    if (!rt) return;
+    for (const send of rt.sockets.values()) send(msg);
+  }
+
+  /**
+   * Bring a freshly (re)connected player up to date: snapshot, plus the current
+   * round context if a game is in progress, or the finished melodies if over.
+   */
+  sync(code: string, playerId: string): void {
+    const room = this.rooms.get(code);
+    const rt = this.runtimes.get(code);
+    if (!room || !rt) return;
+    this.send(code, playerId, { type: "room:snapshot", room: toSnapshot(room, playerId) });
+
+    if (room.phase === "playing") {
+      const idx = room.players.findIndex((p) => p.id === playerId);
+      if (idx >= 0) {
+        const melody = room.melodies[melodyIndexForPlayer(idx, room.round, room.players.length)]!;
+        this.send(code, playerId, {
+          type: "round:started",
+          round: room.round,
+          contextNotes: lastMeasureContext(melody, room.config),
+          endsAt: room.roundEndsAt,
+        });
+      }
+    } else if (room.phase === "results") {
+      this.send(code, playerId, { type: "game:finished", melodies: room.melodies });
+    }
+  }
+
+  /** Send a fresh, per-player sanitized snapshot to everyone connected. */
+  broadcastSnapshot(code: string): void {
+    const room = this.rooms.get(code);
+    const rt = this.runtimes.get(code);
+    if (!room || !rt) return;
+    for (const [playerId, send] of rt.sockets) {
+      send({ type: "room:snapshot", room: toSnapshot(room, playerId) });
+    }
+  }
+
+  /* ------------------------------ Game flow ------------------------------- */
+
+  startGame(code: string, playerId: string): string | null {
+    const room = this.rooms.get(code);
+    if (!room) return "Room not found";
+    if (playerId !== room.hostId) return "Only the host can start the game";
+    if (room.phase !== "lobby") return "Game already started";
+    if (room.players.length < MIN_PLAYERS) return `Need at least ${MIN_PLAYERS} players`;
+
+    const n = room.players.length;
+    room.totalRounds = n;
+    room.melodies = room.players.map<Melody>((p) => ({
+      id: randomId(),
+      seedPlayerId: p.id,
+      segments: [],
+    }));
+    room.phase = "playing";
+    room.round = 0;
+    this.beginRound(code);
+    return null;
+  }
+
+  updateConfig(code: string, playerId: string, patch: Partial<GameConfig>): void {
+    const room = this.rooms.get(code);
+    if (!room || room.phase !== "lobby" || playerId !== room.hostId) return;
+    room.config = sanitizeConfig(patch, room.config);
+    this.broadcastSnapshot(code);
+  }
+
+  /** Begin the current round: reset ready, set the timer, push contexts. */
+  private beginRound(code: string): void {
+    const room = this.rooms.get(code);
+    const rt = this.runtimes.get(code);
+    if (!room || !rt) return;
+
+    room.ready = {};
+    rt.pending.clear();
+    rt.drafts.clear();
+    room.roundEndsAt = Date.now() + room.config.roundDurationSec * 1000;
+
+    if (rt.timer) clearTimeout(rt.timer);
+    rt.timer = setTimeout(() => this.advanceRound(code), room.config.roundDurationSec * 1000);
+
+    this.broadcastSnapshot(code);
+    for (const [playerId, send] of rt.sockets) {
+      const idx = room.players.findIndex((p) => p.id === playerId);
+      if (idx < 0) continue;
+      const melody = room.melodies[melodyIndexForPlayer(idx, room.round, room.players.length)]!;
+      send({
+        type: "round:started",
+        round: room.round,
+        contextNotes: lastMeasureContext(melody, room.config),
+        endsAt: room.roundEndsAt,
+      });
+    }
+  }
+
+  autosave(code: string, playerId: string, notes: unknown): void {
+    const room = this.rooms.get(code);
+    const rt = this.runtimes.get(code);
+    if (!room || !rt || room.phase !== "playing") return;
+    rt.drafts.set(playerId, validateNotes(notes, room.config));
+  }
+
+  submit(code: string, playerId: string, notes: unknown): void {
+    const room = this.rooms.get(code);
+    const rt = this.runtimes.get(code);
+    if (!room || !rt || room.phase !== "playing") return;
+    const clean = validateNotes(notes, room.config);
+    rt.pending.set(playerId, clean);
+    rt.drafts.set(playerId, clean);
+    room.ready[playerId] = true;
+    this.broadcastSnapshot(code);
+    this.maybeAdvance(code);
+  }
+
+  setReady(code: string, playerId: string, ready: boolean): void {
+    const room = this.rooms.get(code);
+    if (!room || room.phase !== "playing") return;
+    room.ready[playerId] = ready;
+    this.broadcastSnapshot(code);
+    if (ready) this.maybeAdvance(code);
+  }
+
+  /** Advance early once every connected player is ready. */
+  private maybeAdvance(code: string): void {
+    const room = this.rooms.get(code);
+    const rt = this.runtimes.get(code);
+    if (!room || !rt) return;
+    const connected = room.players.filter((p) => rt.sockets.has(p.id));
+    if (connected.length === 0) return;
+    if (connected.every((p) => room.ready[p.id])) this.advanceRound(code);
+  }
+
+  /** Commit every player's segment for the current round and move on. */
+  private advanceRound(code: string): void {
+    const room = this.rooms.get(code);
+    const rt = this.runtimes.get(code);
+    if (!room || !rt || room.phase !== "playing") return;
+    if (rt.timer) {
+      clearTimeout(rt.timer);
+      rt.timer = null;
+    }
+
+    const n = room.players.length;
+    room.players.forEach((player, idx) => {
+      const notes = rt.pending.get(player.id) ?? rt.drafts.get(player.id) ?? [];
+      const melody = room.melodies[melodyIndexForPlayer(idx, room.round, n)]!;
+      melody.segments.push({
+        authorId: player.id,
+        authorName: player.name,
+        order: room.round,
+        notes,
+      });
+    });
+
+    this.broadcast(code, { type: "round:ended", round: room.round });
+    room.round += 1;
+
+    if (room.round >= room.totalRounds) {
+      room.phase = "results";
+      this.broadcast(code, { type: "game:finished", melodies: room.melodies });
+      this.broadcastSnapshot(code);
+    } else {
+      this.beginRound(code);
+    }
+  }
+}
+
+function cleanName(name: string): string {
+  const trimmed = (name ?? "").trim().slice(0, 20);
+  return trimmed.length > 0 ? trimmed : "Player";
+}

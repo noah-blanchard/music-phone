@@ -1,0 +1,20 @@
+{
+  "name": "musicphone",
+  "private": true,
+  "version": "1.0.0",
+  "description": "MusicPhone - a collaborative real-time music game (Gartic Phone, but with melodies).",
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "dev": "concurrently -k -n server,web -c blue,green \"bun run dev:server\" \"bun run dev:web\"",
+    "dev:server": "bun --filter @musicphone/server dev",
+    "dev:web": "bun --filter @musicphone/web dev",
+    "build": "bun --filter '*' build",
+    "typecheck": "bun --filter '*' typecheck"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  },
+  "engines": {
+    "bun": ">=1.1.0"
+  }
+}
