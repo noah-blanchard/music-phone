@@ -26,10 +26,7 @@ bun install
 cp apps/server/.env.example apps/server/.env
 cp apps/web/.env.example apps/web/.env.local
 
-# run both apps together (server :3001, web :3000)
-bun run dev
-
-# …or individually
+# run each app in its own terminal
 bun run dev:server     # Elysia on http://localhost:3001
 bun run dev:web        # Next.js on http://localhost:3000
 ```
@@ -40,8 +37,8 @@ join with 2–8 players.
 ### Useful scripts
 | Command | Effect |
 |---|---|
-| `bun run dev` | run web + server concurrently (`--filter '*'`) |
-| `bun run dev:server` / `bun run dev:web` | run one app |
+| `bun run dev:server` | run the Elysia server (`:3001`) |
+| `bun run dev:web` | run the Next.js web app (`:3000`) |
 | `bun run build` | build all workspaces |
 | `bun run typecheck` | `tsc --noEmit` across all workspaces |
 

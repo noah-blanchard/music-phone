@@ -12,9 +12,11 @@ each one a chain of every player's contribution.
 - **Tone.js** audio, **Zustand** state, **Eden Treaty** typed HTTP
 
 ## Quick start
+Run the two apps in separate terminals:
 ```sh
 bun install
-bun run dev        # web on :3000, server on :3001
+bun run dev:server   # Elysia on :3001
+bun run dev:web      # Next.js on :3000
 ```
 Open http://localhost:3000, create a room, share the 4-letter code, and play with 2–8 people.
 
