@@ -2,8 +2,8 @@ import {
   DEFAULT_CONFIG,
   MAX_PLAYERS,
   MIN_PLAYERS,
+  getMode,
   sanitizeConfig,
-  validateNotes,
   type GameConfig,
   type Melody,
   type Note,
@@ -11,7 +11,6 @@ import {
   type Room,
   type ServerMessage,
 } from "@musicphone/shared";
-import { lastMeasureContext, melodyIndexForPlayer } from "./rotation";
 import { toSnapshot } from "./serialize";
 
 type Sender = (msg: ServerMessage) => void;
@@ -81,6 +80,7 @@ export class RoomManager {
       melodies: [],
       roundEndsAt: 0,
       ready: {},
+      reveal: {},
     };
     this.rooms.set(code, room);
     this.runtimes.set(code, {
@@ -235,15 +235,7 @@ export class RoomManager {
 
     if (room.phase === "playing") {
       const idx = room.players.findIndex((p) => p.id === playerId);
-      if (idx >= 0) {
-        const melody = room.melodies[melodyIndexForPlayer(idx, room.round, room.players.length)]!;
-        this.send(code, playerId, {
-          type: "round:started",
-          round: room.round,
-          contextNotes: lastMeasureContext(melody, room.config),
-          endsAt: room.roundEndsAt,
-        });
-      }
+      if (idx >= 0) this.send(code, playerId, this.roundStartedMsg(room, idx));
     } else if (room.phase === "results") {
       this.send(code, playerId, { type: "game:finished", melodies: room.melodies });
     }
@@ -269,8 +261,9 @@ export class RoomManager {
     console.log(`Starting game in room ${code} hosted by ${playerId}, MIN_PLAYERS=${MIN_PLAYERS}, players=${room.players.length}`);
     if (room.players.length < MIN_PLAYERS) return `Need at least ${MIN_PLAYERS} players`;
 
+    const mode = getMode(room.config.mode);
     const n = room.players.length;
-    room.totalRounds = n;
+    room.totalRounds = mode.totalRounds(n, room.config);
     room.melodies = room.players.map<Melody>((p) => ({
       id: randomId(),
       seedPlayerId: p.id,
@@ -280,6 +273,20 @@ export class RoomManager {
     room.round = 0;
     this.beginRound(code);
     return null;
+  }
+
+  /** Build the per-player `round:started` payload via the active game mode. */
+  private roundStartedMsg(room: Room, playerIdx: number): ServerMessage {
+    const mode = getMode(room.config.mode);
+    const songIdx = mode.assign(playerIdx, room.round, room.players.length);
+    const song = room.melodies[songIdx]!;
+    return {
+      type: "round:started",
+      round: room.round,
+      context: mode.buildContext(song, room.round, room.config),
+      role: mode.roleForRound(room.round, room.config),
+      endsAt: room.roundEndsAt,
+    };
   }
 
   updateConfig(code: string, playerId: string, patch: Partial<GameConfig>): void {
@@ -307,13 +314,7 @@ export class RoomManager {
     for (const [playerId, send] of rt.sockets) {
       const idx = room.players.findIndex((p) => p.id === playerId);
       if (idx < 0) continue;
-      const melody = room.melodies[melodyIndexForPlayer(idx, room.round, room.players.length)]!;
-      send({
-        type: "round:started",
-        round: room.round,
-        contextNotes: lastMeasureContext(melody, room.config),
-        endsAt: room.roundEndsAt,
-      });
+      send(this.roundStartedMsg(room, idx));
     }
   }
 
@@ -321,14 +322,15 @@ export class RoomManager {
     const room = this.rooms.get(code);
     const rt = this.runtimes.get(code);
     if (!room || !rt || room.phase !== "playing") return;
-    rt.drafts.set(playerId, validateNotes(notes, room.config));
+    const clean = getMode(room.config.mode).validateTurn(notes, room.round, room.config);
+    rt.drafts.set(playerId, clean);
   }
 
   submit(code: string, playerId: string, notes: unknown): void {
     const room = this.rooms.get(code);
     const rt = this.runtimes.get(code);
     if (!room || !rt || room.phase !== "playing") return;
-    const clean = validateNotes(notes, room.config);
+    const clean = getMode(room.config.mode).validateTurn(notes, room.round, room.config);
     rt.pending.set(playerId, clean);
     rt.drafts.set(playerId, clean);
     room.ready[playerId] = true;
@@ -364,14 +366,17 @@ export class RoomManager {
       rt.timer = null;
     }
 
+    const mode = getMode(room.config.mode);
     const n = room.players.length;
+    const role = mode.roleForRound(room.round, room.config);
     room.players.forEach((player, idx) => {
       const notes = rt.pending.get(player.id) ?? rt.drafts.get(player.id) ?? [];
-      const melody = room.melodies[melodyIndexForPlayer(idx, room.round, n)]!;
+      const melody = room.melodies[mode.assign(idx, room.round, n)]!;
       melody.segments.push({
         authorId: player.id,
         authorName: player.name,
         order: room.round,
+        roleId: role?.id,
         notes,
       });
     });
@@ -381,11 +386,36 @@ export class RoomManager {
 
     if (room.round >= room.totalRounds) {
       room.phase = "results";
+      // Seed the synced reveal: nothing revealed yet, controllers step it up.
+      room.reveal = {};
+      for (const melody of room.melodies) {
+        room.reveal[melody.id] = { revealedLayers: 0, playing: false };
+      }
       this.broadcast(code, { type: "game:finished", melodies: room.melodies });
       this.broadcastSnapshot(code);
     } else {
       this.beginRound(code);
     }
+  }
+
+  /**
+   * Update a song's guided-reveal state. Only the song's seed player (its first
+   * layer's author) may drive it; the new state is clamped and rebroadcast.
+   */
+  setReveal(
+    code: string,
+    playerId: string,
+    songId: string,
+    revealedLayers: number,
+    playing: boolean,
+  ): void {
+    const room = this.rooms.get(code);
+    if (!room || room.phase !== "results") return;
+    const song = room.melodies.find((m) => m.id === songId);
+    if (!song || song.seedPlayerId !== playerId) return;
+    const clamped = Math.min(Math.max(0, Math.floor(revealedLayers)), song.segments.length);
+    room.reveal[songId] = { revealedLayers: clamped, playing };
+    this.broadcastSnapshot(code);
   }
 }
 

@@ -126,6 +126,36 @@
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.4);
   opacity: 0.85;
 }
+/* Layers mode: prior layers shown faintly in their own role colour. */
+.pr-note.pr-ctx {
+  background: var(--nc, #6f7682);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.4);
+  opacity: 0.3;
+}
+
+/* Drum grid hits */
+.dg-hit {
+  position: absolute;
+  border-radius: 2px;
+  background: var(--nc, var(--amber));
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.35),
+    0 0 8px -1px var(--nc, var(--amber));
+  transition: filter 0.08s ease, box-shadow 0.08s ease;
+}
+.dg-hit.flash {
+  filter: brightness(1.6);
+  box-shadow: 0 0 14px 2px var(--nc, var(--amber));
+}
+.dg-hit.dg-ctx {
+  opacity: 0.3;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.4);
+}
+.pr-key.dg-lane {
+  justify-content: flex-start;
+  padding-left: 8px;
+  font-size: 10px;
+}
 
 /* Playhead */
 .pr-playhead {

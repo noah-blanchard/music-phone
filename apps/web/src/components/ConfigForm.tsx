@@ -1,6 +1,16 @@
 "use client";
 
-import { SCALE_LABELS, noteLabel, type GameConfig, type ScaleType } from "@musicphone/shared";
+import {
+  MAX_BARS_PER_SONG,
+  MIN_BARS_PER_SONG,
+  MODE_LIST,
+  SCALE_LABELS,
+  noteLabel,
+  type ContextVisibility,
+  type GameConfig,
+  type GameModeId,
+  type ScaleType,
+} from "@musicphone/shared";
 import { Knob } from "@/components/Knob";
 
 interface Props {
@@ -12,11 +22,34 @@ interface Props {
 const ROOT_CHOICES = Array.from({ length: 12 }, (_, i) => 60 + i); // C4..B4
 const SCALES: ScaleType[] = ["major", "minor", "pentatonic"];
 const DURATIONS = [60, 120, 180, 300];
+const VISIBILITY: { value: ContextVisibility; label: string }[] = [
+  { value: "previous", label: "Previous layer" },
+  { value: "all", label: "Everything so far" },
+  { value: "blind", label: "Blind" },
+];
 
 /** Host-editable game settings, styled as console controls. */
 export function ConfigForm({ config, editable, onChange }: Props) {
+  const isLayers = config.mode === "layers";
+
   return (
     <div className="config-grid">
+      <label className="field">
+        <span>Game mode</span>
+        <select
+          className="input"
+          disabled={!editable}
+          value={config.mode}
+          onChange={(e) => onChange({ mode: e.target.value as GameModeId })}
+        >
+          {MODE_LIST.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.name}
+            </option>
+          ))}
+        </select>
+      </label>
+
       <Knob
         label="Tempo"
         value={config.bpm}
@@ -58,6 +91,36 @@ export function ConfigForm({ config, editable, onChange }: Props) {
           ))}
         </select>
       </label>
+
+      {isLayers && (
+        <>
+          <Knob
+            label="Bars / loop"
+            value={config.barsPerSong}
+            min={MIN_BARS_PER_SONG}
+            max={MAX_BARS_PER_SONG}
+            display={`${config.barsPerSong} bars`}
+            disabled={!editable}
+            onChange={(barsPerSong) => onChange({ barsPerSong })}
+          />
+
+          <label className="field">
+            <span>You see</span>
+            <select
+              className="input"
+              disabled={!editable}
+              value={config.contextVisibility}
+              onChange={(e) => onChange({ contextVisibility: e.target.value as ContextVisibility })}
+            >
+              {VISIBILITY.map((v) => (
+                <option key={v.value} value={v.value}>
+                  {v.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </>
+      )}
 
       <label className="field">
         <span>Round time</span>

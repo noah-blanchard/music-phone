@@ -42,6 +42,9 @@ export function handleClientMessage(
     case "player:ready":
       manager.setReady(code, playerId, msg.ready);
       break;
+    case "reveal:update":
+      manager.setReveal(code, playerId, msg.songId, msg.revealedLayers, msg.playing);
+      break;
     case "room:leave":
       manager.leave(code, playerId);
       break;

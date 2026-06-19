@@ -1,4 +1,12 @@
-import { stepsPerTurn, type GameConfig, type Melody, type Note } from "@musicphone/shared";
+import {
+  loopSteps,
+  roleOfSegment,
+  stepsPerTurn,
+  type GameConfig,
+  type Layer,
+  type Melody,
+  type Note,
+} from "@musicphone/shared";
 
 /**
  * Flatten a finished melody into a single list of notes with absolute step
@@ -20,4 +28,22 @@ export function flattenMelody(melody: Melody, config: GameConfig): Note[] {
 /** Total number of steps a finished melody spans. */
 export function melodySteps(melody: Melody, config: GameConfig): number {
   return Math.max(1, melody.segments.length) * stepsPerTurn(config);
+}
+
+/**
+ * Turn a layers-mode song into stacked playback layers (all over the same
+ * loop). `limit`, if given, keeps only the first N layers — used by the results
+ * reveal to progressively unveil the arrangement.
+ */
+export function stackLayers(melody: Melody, limit?: number): Layer[] {
+  const segments = limit == null ? melody.segments : melody.segments.slice(0, limit);
+  return segments.map((seg) => ({
+    roleId: roleOfSegment(seg.order, seg.roleId)?.id ?? seg.roleId ?? "",
+    notes: seg.notes,
+  }));
+}
+
+/** Length of one loop in steps (layers mode). */
+export function loopLength(config: GameConfig): number {
+  return loopSteps(config);
 }

@@ -34,25 +34,40 @@ export const NOTE_NAMES = [
 ] as const;
 
 /**
- * Build the ascending list of in-scale MIDI pitches for a config, spanning
- * `octaves` octaves starting at `root`. The piano roll uses the reverse of this
- * list (high pitch on top) for its rows.
+ * Build the ascending list of in-scale MIDI pitches for a scale, spanning
+ * `octaves` octaves starting at `root`. The primitive behind `buildScalePitches`
+ * and the per-role pitch windows used in layers mode.
  */
-export function buildScalePitches(config: GameConfig): number[] {
-  const intervals = SCALE_INTERVALS[config.scale];
+export function buildScaleWindow(scale: ScaleType, root: number, octaves: number): number[] {
+  const intervals = SCALE_INTERVALS[scale];
   const pitches: number[] = [];
-  for (let octave = 0; octave <= config.octaves; octave++) {
+  for (let octave = 0; octave <= octaves; octave++) {
     for (const interval of intervals) {
-      const pitch = config.root + octave * 12 + interval;
-      pitches.push(pitch);
+      pitches.push(root + octave * 12 + interval);
     }
   }
   return pitches;
 }
 
+/**
+ * Build the ascending list of in-scale MIDI pitches for a config, spanning
+ * `octaves` octaves starting at `root`. The piano roll uses the reverse of this
+ * list (high pitch on top) for its rows.
+ */
+export function buildScalePitches(config: GameConfig): number[] {
+  return buildScaleWindow(config.scale, config.root, config.octaves);
+}
+
 /** True if a MIDI pitch belongs to the config's scale and visible range. */
 export function isInScale(pitch: number, config: GameConfig): boolean {
   return buildScalePitches(config).includes(pitch);
+}
+
+/** Every chromatic MIDI pitch (ascending) in a window from `root` up `octaves`. */
+export function buildChromaticWindow(root: number, octaves: number): number[] {
+  const pitches: number[] = [];
+  for (let p = root; p <= root + octaves * 12; p++) pitches.push(p);
+  return pitches;
 }
 
 /**
@@ -61,11 +76,7 @@ export function isInScale(pitch: number, config: GameConfig): boolean {
  * in-scale ones are placeable, the rest are shown dimmed and locked.
  */
 export function buildChromaticRange(config: GameConfig): number[] {
-  const pitches: number[] = [];
-  for (let p = config.root; p <= config.root + config.octaves * 12; p++) {
-    pitches.push(p);
-  }
-  return pitches;
+  return buildChromaticWindow(config.root, config.octaves);
 }
 
 /** True if a MIDI pitch is a black key (sharp/flat) on a piano. */

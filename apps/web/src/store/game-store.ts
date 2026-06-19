@@ -2,8 +2,10 @@ import { create } from "zustand";
 import type {
   ClientMessage,
   GameConfig,
+  Layer,
   Melody,
   Note,
+  Role,
   RoomSnapshot,
   ServerMessage,
   Timbre,
@@ -17,8 +19,12 @@ import { wsUrl } from "@/lib/eden";
 
 interface GameState {
   snapshot: RoomSnapshot | null;
-  /** Read-only last measure handed to the local player this round. */
+  /** Read-only trailing measure handed to the local player (continue mode). */
   contextNotes: Note[];
+  /** Read-only prior layers handed to the local player (layers mode). */
+  contextLayers: Layer[];
+  /** The role to fill this round (layers mode); null otherwise. */
+  currentRole: Role | null;
   /** Finished melodies, populated on game:finished. */
   finishedMelodies: Melody[];
   /** Local, editable notes for the current turn. */
@@ -40,6 +46,8 @@ interface GameState {
   updateConfig: (patch: Partial<GameConfig>) => void;
   setReady: (ready: boolean) => void;
   submitTurn: () => void;
+  /** Drive the synced results reveal for a song (seed player only). */
+  setReveal: (songId: string, revealedLayers: number, playing: boolean) => void;
 }
 
 let socket: WebSocket | null = null;
@@ -54,6 +62,8 @@ function send(msg: ClientMessage): void {
 export const useGameStore = create<GameState>((set, get) => ({
   snapshot: null,
   contextNotes: [],
+  contextLayers: [],
+  currentRole: null,
   finishedMelodies: [],
   draft: [],
   selectedTimbre: "sine",
@@ -107,7 +117,15 @@ export const useGameStore = create<GameState>((set, get) => ({
     reconnectArgs = null;
     socket?.close();
     socket = null;
-    set({ snapshot: null, connected: false, draft: [], contextNotes: [], finishedMelodies: [] });
+    set({
+      snapshot: null,
+      connected: false,
+      draft: [],
+      contextNotes: [],
+      contextLayers: [],
+      currentRole: null,
+      finishedMelodies: [],
+    });
   },
 
   setDraft: (notes) => {
@@ -130,6 +148,8 @@ export const useGameStore = create<GameState>((set, get) => ({
     send({ type: "turn:submit", notes: get().draft });
     send({ type: "player:ready", ready: true });
   },
+  setReveal: (songId, revealedLayers, playing) =>
+    send({ type: "reveal:update", songId, revealedLayers, playing }),
 }));
 
 function dispatch(
@@ -145,7 +165,13 @@ function dispatch(
     case "round:started":
       // A new turn begins: load the read-only context, clear local work, and
       // bump the cue so the countdown overlay fires.
-      set((s) => ({ contextNotes: msg.contextNotes, draft: [], roundCue: s.roundCue + 1 }));
+      set((s) => ({
+        contextNotes: msg.context.kind === "trailing-measure" ? msg.context.notes : [],
+        contextLayers: msg.context.kind === "layers" ? msg.context.layers : [],
+        currentRole: msg.role,
+        draft: [],
+        roundCue: s.roundCue + 1,
+      }));
       break;
     case "round:ended":
       break;

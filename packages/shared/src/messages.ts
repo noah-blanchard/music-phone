@@ -1,4 +1,5 @@
 import type { GameConfig, Melody, Note, RoomSnapshot } from "./types";
+import type { Role, RoundContext } from "./modes/types";
 
 /**
  * WebSocket protocol. All realtime gameplay flows over these discriminated
@@ -38,12 +39,24 @@ export interface MsgLeave {
   type: "room:leave";
 }
 
+/**
+ * Results-phase reveal control. Only accepted from the song's seed player; the
+ * server clamps and rebroadcasts so everyone follows the same guided reveal.
+ */
+export interface MsgReveal {
+  type: "reveal:update";
+  songId: string;
+  revealedLayers: number;
+  playing: boolean;
+}
+
 export type ClientMessage =
   | MsgStart
   | MsgConfigUpdate
   | MsgAutosave
   | MsgSubmit
   | MsgReady
+  | MsgReveal
   | MsgLeave;
 
 export type ClientMessageType = ClientMessage["type"];
@@ -59,11 +72,12 @@ export interface MsgRoundStarted {
   type: "round:started";
   round: number;
   /**
-   * The last measure of the melody assigned to this player, shown read-only as
-   * context. Empty for the very first round (seed melodies start blank).
-   * Step indices are normalized to 0..stepsPerMeasure-1.
+   * Read-only context for this turn (mode-specific): the previous trailing
+   * measure in `continue`, or 0..many prior layers in `layers`.
    */
-  contextNotes: Note[];
+  context: RoundContext;
+  /** The role to fill this round (layers mode); null when the mode has no roles. */
+  role: Role | null;
   /** Epoch milliseconds at which this round auto-advances. */
   endsAt: number;
 }

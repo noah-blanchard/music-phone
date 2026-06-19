@@ -285,11 +285,34 @@
   gap: 6px;
   font-size: 11px;
   color: #11100c;
+  border: none;
   border-radius: 5px;
   overflow: hidden;
   white-space: nowrap;
   box-shadow: 0 0 12px -3px var(--sc);
   background: var(--sc);
+}
+
+/* Layers-mode reveal row: stacked controls + clickable layer chips */
+.result-row.song-reveal {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+button.strip-seg {
+  cursor: pointer;
+  font-family: inherit;
+}
+button.strip-seg:disabled {
+  cursor: default;
+}
+.strip-seg.hidden {
+  color: var(--muted-2);
+  box-shadow: none;
+}
+.strip-seg.muted {
+  opacity: 0.4;
+  text-decoration: line-through;
 }
 
 /* ------------------------------ Overlay --------------------------------- */

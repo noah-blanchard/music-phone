@@ -1,5 +1,11 @@
 import type { ClientMessage } from "./messages";
-import { TIMBRES, type GameConfig, type Note } from "./types";
+import {
+  MAX_BARS_PER_SONG,
+  MIN_BARS_PER_SONG,
+  TIMBRES,
+  type GameConfig,
+  type Note,
+} from "./types";
 import { isInScale } from "./scales";
 
 /**
@@ -64,6 +70,17 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
       return Array.isArray(raw.notes) ? { type: "turn:autosave", notes: raw.notes as Note[] } : null;
     case "turn:submit":
       return Array.isArray(raw.notes) ? { type: "turn:submit", notes: raw.notes as Note[] } : null;
+    case "reveal:update":
+      return typeof raw.songId === "string" &&
+        isFiniteInt(raw.revealedLayers) &&
+        typeof raw.playing === "boolean"
+        ? {
+            type: "reveal:update",
+            songId: raw.songId,
+            revealedLayers: raw.revealedLayers,
+            playing: raw.playing,
+          }
+        : null;
     default:
       return null;
   }
@@ -72,10 +89,21 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
 /** Clamp a partial config update into safe bounds. */
 export function sanitizeConfig(patch: Partial<GameConfig>, base: GameConfig): GameConfig {
   const next: GameConfig = { ...base };
+  if (patch.mode === "continue" || patch.mode === "layers") next.mode = patch.mode;
   if (isFiniteInt(patch.bpm)) next.bpm = Math.min(240, Math.max(40, patch.bpm));
   if (isFiniteInt(patch.root)) next.root = Math.min(84, Math.max(48, patch.root));
   if (patch.scale === "major" || patch.scale === "minor" || patch.scale === "pentatonic") {
     next.scale = patch.scale;
+  }
+  if (isFiniteInt(patch.barsPerSong)) {
+    next.barsPerSong = Math.min(MAX_BARS_PER_SONG, Math.max(MIN_BARS_PER_SONG, patch.barsPerSong));
+  }
+  if (
+    patch.contextVisibility === "previous" ||
+    patch.contextVisibility === "all" ||
+    patch.contextVisibility === "blind"
+  ) {
+    next.contextVisibility = patch.contextVisibility;
   }
   if (isFiniteInt(patch.roundDurationSec)) {
     next.roundDurationSec = Math.min(600, Math.max(30, patch.roundDurationSec));
