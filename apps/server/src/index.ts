@@ -9,6 +9,8 @@ const manager = new RoomManager();
 const WEB_ORIGIN = process.env.WEB_ORIGIN ?? "*";
 const PORT = Number(process.env.PORT ?? 3001);
 
+console.log(`🚀 Starting MusicPhone server with WEB_ORIGIN=${WEB_ORIGIN} on port ${PORT}...`);
+
 const app = new Elysia()
   .use(cors({ origin: WEB_ORIGIN, credentials: false }))
   .get("/health", () => ({ ok: true, service: "musicphone-server" }))
