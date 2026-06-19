@@ -6,7 +6,8 @@ import { handleClientMessage } from "./ws/handlers";
 
 const manager = new RoomManager();
 
-const WEB_ORIGIN = process.env.WEB_ORIGIN ?? "*";
+const rawOrigin = process.env.WEB_ORIGIN ?? "*";
+const WEB_ORIGIN = rawOrigin === "*" ? "*" : rawOrigin.replace(/\/$/, "");
 const PORT = Number(process.env.PORT ?? 3001);
 
 console.log(`🚀 Starting MusicPhone server with WEB_ORIGIN=${WEB_ORIGIN} on port ${PORT}...`);
