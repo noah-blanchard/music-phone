@@ -266,6 +266,7 @@ export class RoomManager {
     if (!room) return "Room not found";
     if (playerId !== room.hostId) return "Only the host can start the game";
     if (room.phase !== "lobby") return "Game already started";
+    console.log(`Starting game in room ${code} hosted by ${playerId}, MIN_PLAYERS=${MIN_PLAYERS}, players=${room.players.length}`);
     if (room.players.length < MIN_PLAYERS) return `Need at least ${MIN_PLAYERS} players`;
 
     const n = room.players.length;

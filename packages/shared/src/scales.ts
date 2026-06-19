@@ -55,6 +55,24 @@ export function isInScale(pitch: number, config: GameConfig): boolean {
   return buildScalePitches(config).includes(pitch);
 }
 
+/**
+ * Every MIDI pitch (chromatic) in the visible window, ascending — from the root
+ * up to `root + octaves*12`. The piano roll renders all of these as rows; the
+ * in-scale ones are placeable, the rest are shown dimmed and locked.
+ */
+export function buildChromaticRange(config: GameConfig): number[] {
+  const pitches: number[] = [];
+  for (let p = config.root; p <= config.root + config.octaves * 12; p++) {
+    pitches.push(p);
+  }
+  return pitches;
+}
+
+/** True if a MIDI pitch is a black key (sharp/flat) on a piano. */
+export function isBlackKey(pitch: number): boolean {
+  return [1, 3, 6, 8, 10].includes(((pitch % 12) + 12) % 12);
+}
+
 /** Human-readable note label, e.g. 60 -> "C4". */
 export function noteLabel(pitch: number): string {
   const name = NOTE_NAMES[((pitch % 12) + 12) % 12];

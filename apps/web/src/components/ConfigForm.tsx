@@ -1,11 +1,7 @@
 "use client";
 
-import {
-  SCALE_LABELS,
-  noteLabel,
-  type GameConfig,
-  type ScaleType,
-} from "@musicphone/shared";
+import { SCALE_LABELS, noteLabel, type GameConfig, type ScaleType } from "@musicphone/shared";
+import { Knob } from "@/components/Knob";
 
 interface Props {
   config: GameConfig;
@@ -17,13 +13,24 @@ const ROOT_CHOICES = Array.from({ length: 12 }, (_, i) => 60 + i); // C4..B4
 const SCALES: ScaleType[] = ["major", "minor", "pentatonic"];
 const DURATIONS = [60, 120, 180, 300];
 
-/** Host-editable game settings shown in the lobby (read-only for guests). */
+/** Host-editable game settings, styled as console controls. */
 export function ConfigForm({ config, editable, onChange }: Props) {
   return (
-    <div className="config">
+    <div className="config-grid">
+      <Knob
+        label="Tempo"
+        value={config.bpm}
+        min={60}
+        max={180}
+        display={`${config.bpm} BPM`}
+        disabled={!editable}
+        onChange={(bpm) => onChange({ bpm })}
+      />
+
       <label className="field">
         <span>Root</span>
         <select
+          className="input"
           disabled={!editable}
           value={config.root}
           onChange={(e) => onChange({ root: Number(e.target.value) })}
@@ -39,6 +46,7 @@ export function ConfigForm({ config, editable, onChange }: Props) {
       <label className="field">
         <span>Scale</span>
         <select
+          className="input"
           disabled={!editable}
           value={config.scale}
           onChange={(e) => onChange({ scale: e.target.value as ScaleType })}
@@ -52,21 +60,9 @@ export function ConfigForm({ config, editable, onChange }: Props) {
       </label>
 
       <label className="field">
-        <span>Tempo · {config.bpm} BPM</span>
-        <input
-          type="range"
-          min={60}
-          max={180}
-          step={1}
-          disabled={!editable}
-          value={config.bpm}
-          onChange={(e) => onChange({ bpm: Number(e.target.value) })}
-        />
-      </label>
-
-      <label className="field">
         <span>Round time</span>
         <select
+          className="input"
           disabled={!editable}
           value={config.roundDurationSec}
           onChange={(e) => onChange({ roundDurationSec: Number(e.target.value) })}

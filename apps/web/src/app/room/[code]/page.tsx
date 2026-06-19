@@ -89,18 +89,11 @@ function RoomConnected({ code, playerId }: { code: string; playerId: string }) {
       return <Play />;
     case "results":
       return (
-        <div className="page stack">
-          <h1 className="brand">
-            Music<span>Phone</span> · results
-          </h1>
-          <div className="card">
-            <ResultsPlayer
-              melodies={snapshot.melodies}
-              config={snapshot.config}
-              roomCode={snapshot.code}
-            />
-          </div>
-        </div>
+        <ResultsPlayer
+          melodies={snapshot.melodies}
+          config={snapshot.config}
+          roomCode={snapshot.code}
+        />
       );
   }
 }

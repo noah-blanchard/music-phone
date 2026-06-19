@@ -1,0 +1,110 @@
+/* ============================================================================
+   Design tokens — "dark vintage synth hardware"
+   Near-black canvas, brushed charcoal metal, warm amber LEDs, cream labels.
+   ========================================================================== */
+
+:root {
+  /* Surfaces */
+  --bg: #0b0c0e;
+  --bg-2: #0e0f12;
+  --metal: #1a1b20;
+  --metal-2: #212329;
+  --metal-3: #2a2d35;
+  --screen: #07090c; /* CRT-like dark display surface */
+  --line: #34373f;
+
+  /* Bevels (for the tactile hardware look) */
+  --bevel-hi: rgba(255, 255, 255, 0.08);
+  --bevel-lo: rgba(0, 0, 0, 0.55);
+
+  /* Text */
+  --text: #e9e3d4; /* warm off-white */
+  --cream: #efe6d2;
+  --muted: #8b8c93;
+  --muted-2: #62646c;
+
+  /* Accents — amber LED family */
+  --amber: #ffb347;
+  --amber-deep: #ff8c1a;
+  --amber-glow: rgba(255, 158, 44, 0.55);
+  --cyan: #46d6e0;
+  --vu-green: #5ad17a;
+  --vu-amber: #f2c14e;
+  --vu-red: #e05656;
+  --danger: #e0563f;
+
+  /* Timbre neon colors (glow versions of the V1 palette) */
+  --t-sine: #4fd0ff;
+  --t-triangle: #4ee6a0;
+  --t-sawtooth: #ffae42;
+  --t-square: #e36cc4;
+
+  /* Radii */
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 16px;
+  --r-pill: 999px;
+
+  /* Shadows */
+  --shadow-panel: 0 18px 40px -18px rgba(0, 0, 0, 0.8);
+  --glow-amber: 0 0 12px var(--amber-glow);
+
+  /* Fonts (wired by next/font in layout.tsx) */
+  --font-display: var(--font-orbitron), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, "SFMono-Regular", monospace;
+
+  /* Layout */
+  --hud-h: 64px;
+  --dock-h: 96px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background:
+    radial-gradient(1200px 600px at 50% -10%, rgba(255, 158, 44, 0.06), transparent 60%),
+    var(--bg);
+  color: var(--text);
+  font-family: var(--font-mono);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+#__next,
+body > div:first-child {
+  height: 100%;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  margin: 0;
+}
+
+button {
+  font-family: var(--font-mono);
+}
+
+::selection {
+  background: var(--amber);
+  color: #1a1206;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

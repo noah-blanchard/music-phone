@@ -1,0 +1,290 @@
+/* ============================================================================
+   Hardware primitives — reusable "synth panel" building blocks.
+   ========================================================================== */
+
+/* Brushed-metal beveled panel */
+.panel {
+  position: relative;
+  background:
+    linear-gradient(180deg, var(--metal-2), var(--metal));
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow:
+    inset 0 1px 0 var(--bevel-hi),
+    inset 0 -2px 6px var(--bevel-lo),
+    var(--shadow-panel);
+}
+/* faint brushed texture */
+.panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0.04;
+  background: repeating-linear-gradient(
+    90deg,
+    #fff 0 1px,
+    transparent 1px 3px
+  );
+}
+
+/* Dark CRT-style display surface (piano roll, readouts) */
+.screen {
+  position: relative;
+  background: radial-gradient(120% 140% at 50% 0%, #0c1014, var(--screen));
+  border: 1px solid #000;
+  border-radius: var(--r-md);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.03),
+    inset 0 0 40px rgba(0, 0, 0, 0.7);
+  overflow: hidden;
+}
+.screen::after {
+  /* scanlines */
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.16) 0 1px,
+    transparent 1px 3px
+  );
+  opacity: 0.5;
+}
+
+/* LED readout text */
+.led {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.12em;
+  color: var(--amber);
+  text-shadow: var(--glow-amber);
+}
+.led-dim {
+  color: var(--muted);
+  text-shadow: none;
+}
+
+/* Chunky hardware button */
+.hw-btn {
+  --btn-bg1: var(--metal-3);
+  --btn-bg2: var(--metal);
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 11px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--cream);
+  background: linear-gradient(180deg, var(--btn-bg1), var(--btn-bg2));
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  user-select: none;
+  box-shadow:
+    inset 0 1px 0 var(--bevel-hi),
+    0 3px 0 var(--bevel-lo),
+    0 6px 14px -6px rgba(0, 0, 0, 0.7);
+  transition: transform 0.06s ease, box-shadow 0.06s ease, filter 0.12s ease;
+}
+.hw-btn:hover:not(:disabled) {
+  filter: brightness(1.12);
+}
+.hw-btn:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow:
+    inset 0 1px 0 var(--bevel-hi),
+    0 1px 0 var(--bevel-lo);
+}
+.hw-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.hw-btn--primary {
+  color: #1a1206;
+  --btn-bg1: var(--amber);
+  --btn-bg2: var(--amber-deep);
+  border-color: #a8651a;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    0 3px 0 #7a4a12,
+    0 0 18px var(--amber-glow);
+}
+.hw-btn--danger {
+  --btn-bg1: #6a2b22;
+  --btn-bg2: #4a1d17;
+  border-color: #7a3127;
+  color: #ffd9cf;
+}
+.hw-btn--ghost {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--muted);
+}
+
+/* Small icon/round button */
+.hw-icon {
+  width: 46px;
+  height: 46px;
+  padding: 0;
+  font-size: 16px;
+  border-radius: var(--r-md);
+}
+
+/* LED indicator dot */
+.led-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #3a3d45;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.6);
+}
+.led-dot[data-on="true"] {
+  background: var(--vu-green);
+  box-shadow: 0 0 8px rgba(90, 209, 122, 0.8), inset 0 0 0 1px rgba(0, 0, 0, 0.3);
+}
+.led-dot[data-color] {
+  background: var(--c, var(--vu-green));
+  box-shadow: 0 0 8px var(--c, var(--vu-green));
+}
+
+/* Toggle / chip */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--metal);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+}
+
+/* Rotary knob */
+.knob {
+  --angle: 0deg;
+  position: relative;
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 35%, var(--metal-3), #0d0e11 80%);
+  border: 1px solid #000;
+  box-shadow:
+    inset 0 2px 3px var(--bevel-hi),
+    inset 0 -3px 6px var(--bevel-lo),
+    0 4px 10px -4px rgba(0, 0, 0, 0.8);
+  cursor: ns-resize;
+}
+.knob::after {
+  content: "";
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  width: 3px;
+  height: 18px;
+  border-radius: 2px;
+  background: var(--amber);
+  box-shadow: var(--glow-amber);
+  transform: translateX(-50%) rotate(var(--angle));
+  transform-origin: 50% 21px;
+}
+
+/* VU meter */
+.vu {
+  display: flex;
+  gap: 3px;
+  align-items: flex-end;
+  height: 26px;
+}
+.vu-bar {
+  width: 4px;
+  border-radius: 1px;
+  background: var(--metal-3);
+}
+.vu-bar[data-lit="g"] {
+  background: var(--vu-green);
+  box-shadow: 0 0 6px rgba(90, 209, 122, 0.7);
+}
+.vu-bar[data-lit="a"] {
+  background: var(--vu-amber);
+  box-shadow: 0 0 6px rgba(242, 193, 78, 0.7);
+}
+.vu-bar[data-lit="r"] {
+  background: var(--vu-red);
+  box-shadow: 0 0 6px rgba(224, 86, 86, 0.7);
+}
+
+/* Form fields, hardware style */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.input,
+input.input,
+select.input {
+  background: var(--screen);
+  color: var(--cream);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  padding: 10px 12px;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  width: 100%;
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.6);
+}
+.input:focus {
+  outline: none;
+  border-color: var(--amber);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.6), 0 0 0 1px var(--amber-glow);
+}
+
+/* Layout helpers */
+.fill {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.center {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+.row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.spread {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.muted {
+  color: var(--muted);
+}
+.error {
+  color: var(--danger);
+  font-size: 13px;
+}

@@ -26,6 +26,8 @@ interface GameState {
   selectedTimbre: Timbre;
   connected: boolean;
   error: string | null;
+  /** Increments on each round:started — drives the countdown overlay. */
+  roundCue: number;
 
   connect: (code: string, playerId: string) => void;
   disconnect: () => void;
@@ -57,6 +59,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   selectedTimbre: "sine",
   connected: false,
   error: null,
+  roundCue: 0,
 
   connect: (code, playerId) => {
     intentionalClose = false;
@@ -131,7 +134,7 @@ export const useGameStore = create<GameState>((set, get) => ({
 
 function dispatch(
   msg: ServerMessage,
-  set: (partial: Partial<GameState>) => void,
+  set: (partial: Partial<GameState> | ((s: GameState) => Partial<GameState>)) => void,
   get: () => GameState,
 ): void {
   switch (msg.type) {
@@ -140,8 +143,9 @@ function dispatch(
       if (msg.room.phase === "results") set({ finishedMelodies: msg.room.melodies });
       break;
     case "round:started":
-      // A new turn begins: load the read-only context and clear local work.
-      set({ contextNotes: msg.contextNotes, draft: [] });
+      // A new turn begins: load the read-only context, clear local work, and
+      // bump the cue so the countdown overlay fires.
+      set((s) => ({ contextNotes: msg.contextNotes, draft: [], roundCue: s.roundCue + 1 }));
       break;
     case "round:ended":
       break;

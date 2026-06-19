@@ -1,8 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
+  buildChromaticRange,
   buildScalePitches,
+  isBlackKey,
   noteLabel,
   type GameConfig,
   type Note,
@@ -10,14 +12,13 @@ import {
 } from "@musicphone/shared";
 import { ensureAudio, previewNote } from "@/lib/audio/engine";
 
-const CELL_W = 22;
-const ROW_H = 18;
+const KEYS_W = 56; // piano-keyboard gutter width (px)
 
 const TIMBRE_COLOR: Record<Timbre, string> = {
-  sine: "#4f9dde",
-  triangle: "#39b58a",
-  sawtooth: "#e0913a",
-  square: "#c2569e",
+  sine: "var(--t-sine)",
+  triangle: "var(--t-triangle)",
+  sawtooth: "var(--t-sawtooth)",
+  square: "var(--t-square)",
 };
 
 interface Props {
@@ -27,44 +28,61 @@ interface Props {
   contextNotes: Note[];
   selectedTimbre: Timbre;
   onChange: (notes: Note[]) => void;
-  /** Optional playhead step within the editable region (for live playback). */
+  /** Playhead step within the editable region during local playback. */
   playStep?: number | null;
 }
 
 /**
- * Scale-locked piano roll. The first measure is a greyed read-only preview of
- * the previous player's last measure; the following `measuresPerTurn` measures
- * are the editable region. Draw notes by click-dragging; click a note to delete.
+ * Full-screen, scale-locked piano roll. Rows are a full chromatic keyboard:
+ * in-scale rows are playable, out-of-scale rows are dimmed and locked. The grid
+ * auto-sizes to its container (no scrolling). The first measure is a read-only
+ * preview of the previous player's last measure; the next `measuresPerTurn` are
+ * editable. Draw notes by click-dragging; click a note to delete.
  */
 export function PianoRoll({ config, draft, contextNotes, selectedTimbre, onChange, playStep }: Props) {
-  const pitches = buildScalePitches(config).slice().reverse(); // high pitch on top
+  const pitches = useMemo(() => buildChromaticRange(config).slice().reverse(), [config]); // high on top
+  const inScale = useMemo(() => new Set(buildScalePitches(config)), [config]);
   const editSteps = config.stepsPerMeasure * config.measuresPerTurn;
   const contextSteps = config.stepsPerMeasure;
   const totalSteps = contextSteps + editSteps;
+  const rows = pitches.length;
 
   const gridRef = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState({ w: 0, h: 0 });
   const [drawing, setDrawing] = useState<{ pitch: number; start: number } | null>(null);
   const draftRef = useRef(draft);
   draftRef.current = draft;
 
+  // Auto-fit the grid to its container.
+  useLayoutEffect(() => {
+    const el = gridRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setSize({ w: el.clientWidth, h: el.clientHeight }));
+    ro.observe(el);
+    setSize({ w: el.clientWidth, h: el.clientHeight });
+    return () => ro.disconnect();
+  }, []);
+
+  const cellW = size.w / totalSteps;
+  const rowH = size.h / rows;
+
   const locate = useCallback(
     (clientX: number, clientY: number): { pitch: number; step: number } | null => {
       const el = gridRef.current;
-      if (!el) return null;
+      if (!el || cellW <= 0 || rowH <= 0) return null;
       const rect = el.getBoundingClientRect();
-      const col = Math.floor((clientX - rect.left + el.scrollLeft) / CELL_W);
-      const row = Math.floor((clientY - rect.top + el.scrollTop) / ROW_H);
+      const col = Math.floor((clientX - rect.left) / cellW);
+      const row = Math.floor((clientY - rect.top) / rowH);
       const pitch = pitches[row];
       if (pitch === undefined) return null;
-      const step = col - contextSteps; // negative inside the read-only context
-      return { pitch, step };
+      return { pitch, step: col - contextSteps };
     },
-    [pitches, contextSteps],
+    [cellW, rowH, pitches, contextSteps],
   );
 
   const onMouseDown = (e: React.MouseEvent) => {
     const hit = locate(e.clientX, e.clientY);
-    if (!hit || hit.step < 0 || hit.step >= editSteps) return;
+    if (!hit || hit.step < 0 || hit.step >= editSteps || !inScale.has(hit.pitch)) return;
 
     const existing = draftRef.current.find(
       (n) => n.pitch === hit.pitch && hit.step >= n.start && hit.step < n.start + n.length,
@@ -85,10 +103,7 @@ export function PianoRoll({ config, draft, contextNotes, selectedTimbre, onChang
     const onMove = (e: MouseEvent) => {
       const hit = locate(e.clientX, e.clientY);
       if (!hit) return;
-      const length = Math.min(
-        Math.max(1, hit.step - drawing.start + 1),
-        editSteps - drawing.start,
-      );
+      const length = Math.min(Math.max(1, hit.step - drawing.start + 1), editSteps - drawing.start);
       onChange(
         draftRef.current.map((n) =>
           n.pitch === drawing.pitch && n.start === drawing.start ? { ...n, length } : n,
@@ -104,74 +119,116 @@ export function PianoRoll({ config, draft, contextNotes, selectedTimbre, onChang
     };
   }, [drawing, locate, editSteps, onChange]);
 
+  // Which pitches are sounding right now (for note flash + key lighting).
+  const litPitches = useMemo(() => {
+    const lit = new Set<number>();
+    if (playStep != null && playStep >= 0) {
+      for (const n of draft) {
+        if (playStep >= n.start && playStep < n.start + n.length) lit.add(n.pitch);
+      }
+    }
+    return lit;
+  }, [playStep, draft]);
+
   const renderNote = (note: Note, offsetSteps: number, readOnly: boolean, key: string) => {
     const row = pitches.indexOf(note.pitch);
     if (row < 0) return null;
+    const flash = !readOnly && litPitches.has(note.pitch);
     return (
       <div
         key={key}
-        className={`pr-note${readOnly ? " pr-note-ro" : ""}`}
+        className={`pr-note${readOnly ? " ro" : ""}${flash ? " flash" : ""}`}
         style={{
-          left: (note.start + offsetSteps) * CELL_W,
-          top: row * ROW_H,
-          width: note.length * CELL_W - 2,
-          height: ROW_H - 2,
-          background: readOnly ? "#7a8190" : TIMBRE_COLOR[note.timbre],
+          left: (note.start + offsetSteps) * cellW,
+          top: row * rowH + 1,
+          width: Math.max(2, note.length * cellW - 1.5),
+          height: Math.max(2, rowH - 2),
+          ["--nc" as string]: readOnly ? undefined : TIMBRE_COLOR[note.timbre],
         }}
       />
     );
   };
 
+  const ready = cellW > 0 && rowH > 0;
+
   return (
-    <div className="pr-wrap">
-      <div className="pr-labels" style={{ height: pitches.length * ROW_H }}>
-        {pitches.map((p) => (
-          <div key={p} className="pr-label" style={{ height: ROW_H }}>
-            {noteLabel(p)}
-          </div>
-        ))}
+    <div className="pr">
+      {/* Piano keyboard gutter */}
+      <div className="pr-keys" style={{ width: KEYS_W }}>
+        {ready &&
+          pitches.map((p, r) => {
+            const lit = litPitches.has(p);
+            const cls = lit ? "lit" : isBlackKey(p) ? "black" : "white";
+            return (
+              <div
+                key={p}
+                className={`pr-key ${cls}`}
+                style={{ top: r * rowH, height: rowH }}
+              >
+                {p % 12 === config.root % 12 ? noteLabel(p) : ""}
+              </div>
+            );
+          })}
       </div>
 
-      <div
-        ref={gridRef}
-        className="pr-grid"
-        style={{ width: totalSteps * CELL_W, height: pitches.length * ROW_H }}
-        onMouseDown={onMouseDown}
-      >
-        {/* Row striping */}
-        {pitches.map((p, r) => (
-          <div
-            key={`row-${p}`}
-            className={`pr-row${r % 2 ? " pr-row-alt" : ""}`}
-            style={{ top: r * ROW_H, height: ROW_H, width: totalSteps * CELL_W }}
-          />
-        ))}
+      {/* Grid */}
+      <div ref={gridRef} className="pr-grid" onMouseDown={onMouseDown}>
+        {ready && (
+          <>
+            {/* Row backgrounds (locked / in-scale / root) */}
+            {pitches.map((p, r) => {
+              const locked = !inScale.has(p);
+              const isRoot = p % 12 === config.root % 12;
+              const cls = locked
+                ? "locked"
+                : `in-scale${isRoot ? " root" : ""}${r % 2 ? " alt" : ""}`;
+              return (
+                <div
+                  key={`row-${p}`}
+                  className={`pr-row ${cls}`}
+                  style={{ top: r * rowH, height: rowH, width: size.w }}
+                />
+              );
+            })}
 
-        {/* Context (read-only) region background */}
-        <div
-          className="pr-context"
-          style={{ width: contextSteps * CELL_W, height: pitches.length * ROW_H }}
-        />
+            {/* Horizontal row separators */}
+            {pitches.map((p, r) => (
+              <div
+                key={`rl-${p}`}
+                className="pr-rowline"
+                style={{ top: (r + 1) * rowH - 1, width: size.w }}
+              />
+            ))}
 
-        {/* Measure/beat grid lines */}
-        {Array.from({ length: totalSteps + 1 }).map((_, c) => (
-          <div
-            key={`col-${c}`}
-            className={`pr-col${c % config.stepsPerMeasure === 0 ? " pr-col-measure" : c % 4 === 0 ? " pr-col-beat" : ""}`}
-            style={{ left: c * CELL_W, height: pitches.length * ROW_H }}
-          />
-        ))}
+            {/* Read-only context region */}
+            <div className="pr-context" style={{ width: contextSteps * cellW, height: size.h }} />
+            <span className="pr-context-label">prev</span>
 
-        {/* Playhead */}
-        {playStep != null && playStep >= 0 && (
-          <div
-            className="pr-playhead"
-            style={{ left: (playStep + contextSteps) * CELL_W, height: pitches.length * ROW_H }}
-          />
+            {/* Vertical beat/measure lines */}
+            {Array.from({ length: totalSteps + 1 }).map((_, c) => {
+              const cls =
+                c % config.stepsPerMeasure === 0 ? "measure" : c % 4 === 0 ? "beat" : "";
+              return (
+                <div
+                  key={`col-${c}`}
+                  className={`pr-col ${cls}`}
+                  style={{ left: c * cellW, height: size.h }}
+                />
+              );
+            })}
+
+            {/* Playhead */}
+            {playStep != null && playStep >= 0 && (
+              <div
+                className="pr-playhead"
+                style={{ left: (playStep + contextSteps) * cellW, height: size.h }}
+              />
+            )}
+
+            {contextNotes.map((n, i) => renderNote(n, 0, true, `ctx-${i}`))}
+            {draft.map((n, i) => renderNote(n, contextSteps, false, `note-${i}`))}
+          </>
         )}
-
-        {contextNotes.map((n, i) => renderNote(n, 0, true, `ctx-${i}`))}
-        {draft.map((n, i) => renderNote(n, contextSteps, false, `note-${i}`))}
       </div>
     </div>
   );

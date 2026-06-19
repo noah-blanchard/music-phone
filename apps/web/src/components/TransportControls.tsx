@@ -11,7 +11,7 @@ interface Props {
   onStep?: (step: number | null) => void;
 }
 
-/** Play/stop the current draft locally through Tone.js. */
+/** Play/stop the current draft locally through Tone.js (hardware button). */
 export function TransportControls({ notes, config, totalSteps, onStep }: Props) {
   const [playing, setPlaying] = useState(false);
   const handleRef = useRef<PlayHandle | null>(null);
@@ -36,12 +36,17 @@ export function TransportControls({ notes, config, totalSteps, onStep }: Props) 
     });
   };
 
-  // Stop playback if the component unmounts mid-song.
   useEffect(() => () => handleRef.current?.stop(), []);
 
   return (
-    <button type="button" className="btn" onClick={play} disabled={notes.length === 0 && !playing}>
-      {playing ? "■ Stop" : "▶ Play"}
+    <button
+      type="button"
+      className={`hw-btn hw-icon${playing ? "" : " hw-btn--primary"}`}
+      onClick={play}
+      disabled={notes.length === 0 && !playing}
+      title={playing ? "Stop" : "Play"}
+    >
+      {playing ? "■" : "▶"}
     </button>
   );
 }

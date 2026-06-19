@@ -16,7 +16,7 @@ each one a chain of every player's contribution.
 bun install
 bun run dev        # web on :3000, server on :3001
 ```
-Open http://localhost:3000, create a room, share the 4-letter code, and play with 3–8 people.
+Open http://localhost:3000, create a room, share the 4-letter code, and play with 2–8 people.
 
 ## Docs
 - **[CLAUDE.md](./CLAUDE.md)** — architecture, data models, WebSocket protocol, game flow, Tone.js notes.

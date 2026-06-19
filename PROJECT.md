@@ -35,7 +35,7 @@ bun run dev:web        # Next.js on http://localhost:3000
 ```
 
 Open `http://localhost:3000`, create a room, then open more tabs (or share the 4-letter code) to
-join with 3–8 players.
+join with 2–8 players.
 
 ### Useful scripts
 | Command | Effect |

@@ -1,0 +1,139 @@
+/* ============================================================================
+   Full-screen piano roll. Sizes/positions are set inline from measured layout;
+   this file is appearance only.
+   ========================================================================== */
+
+.pr {
+  flex: 1 1 auto;
+  display: flex;
+  min-height: 0; /* allow it to shrink inside the flex column */
+}
+
+/* Vintage piano keyboard gutter */
+.pr-keys {
+  flex: 0 0 auto;
+  position: relative;
+  background: linear-gradient(90deg, #141519, #0d0e11);
+  border-right: 1px solid #000;
+}
+.pr-key {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 8px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--muted-2);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.6);
+}
+.pr-key.white {
+  background: linear-gradient(90deg, #d9d4c6, #efe9da);
+  color: #2a2620;
+}
+.pr-key.black {
+  background: linear-gradient(90deg, #0a0b0d, #1a1b1f);
+  color: #6a6c74;
+}
+.pr-key.lit {
+  background: linear-gradient(90deg, var(--amber-deep), var(--amber));
+  color: #1a1206;
+  box-shadow: 0 0 14px var(--amber-glow);
+}
+
+/* Grid surface */
+.pr-grid {
+  position: relative;
+  flex: 1 1 auto;
+  cursor: crosshair;
+  user-select: none;
+}
+.pr-row {
+  position: absolute;
+  left: 0;
+}
+.pr-row.locked {
+  background: rgba(0, 0, 0, 0.5);
+}
+.pr-row.in-scale.alt {
+  background: rgba(255, 255, 255, 0.022);
+}
+.pr-row.root {
+  background: rgba(255, 158, 44, 0.06);
+}
+
+/* Read-only context region (previous player's measure) */
+.pr-context {
+  position: absolute;
+  top: 0;
+  left: 0;
+  background: rgba(70, 214, 224, 0.06);
+  border-right: 2px dashed rgba(70, 214, 224, 0.4);
+  pointer-events: none;
+}
+.pr-context-label {
+  position: absolute;
+  top: 4px;
+  left: 6px;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--cyan);
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+/* Grid lines */
+.pr-col {
+  position: absolute;
+  top: 0;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.035);
+  pointer-events: none;
+}
+.pr-col.beat {
+  background: rgba(255, 255, 255, 0.07);
+}
+.pr-col.measure {
+  background: rgba(255, 255, 255, 0.16);
+}
+.pr-rowline {
+  position: absolute;
+  left: 0;
+  height: 1px;
+  background: rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+}
+
+/* Notes */
+.pr-note {
+  position: absolute;
+  border-radius: 3px;
+  background: var(--nc, var(--amber));
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.35),
+    0 0 8px -1px var(--nc, var(--amber));
+  transition: box-shadow 0.08s ease, filter 0.08s ease;
+}
+.pr-note.flash {
+  filter: brightness(1.5);
+  box-shadow: 0 0 16px 2px var(--nc, var(--amber));
+}
+.pr-note.ro {
+  background: #6f7682;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.4);
+  opacity: 0.85;
+}
+
+/* Playhead */
+.pr-playhead {
+  position: absolute;
+  top: 0;
+  width: 2px;
+  background: var(--amber);
+  box-shadow: 0 0 12px 2px var(--amber-glow);
+  pointer-events: none;
+  z-index: 3;
+}

@@ -120,7 +120,7 @@ export const DEFAULT_CONFIG: GameConfig = {
   roundDurationSec: 180,
 };
 
-export const MIN_PLAYERS = 3;
+export const MIN_PLAYERS = 2;
 export const MAX_PLAYERS = 8;
 
 /** Steps in a single turn for a given config. */

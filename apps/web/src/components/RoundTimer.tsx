@@ -6,7 +6,7 @@ interface Props {
   endsAt: number;
 }
 
-/** Live countdown to the round's auto-advance time. */
+/** Live countdown LED readout to the round's auto-advance time. */
 export function RoundTimer({ endsAt }: Props) {
   const [now, setNow] = useState(Date.now());
 
@@ -21,7 +21,10 @@ export function RoundTimer({ endsAt }: Props) {
   const low = remaining <= 15;
 
   return (
-    <span className={`timer${low ? " timer-low" : ""}`}>
+    <span
+      className="led"
+      style={{ fontSize: 26, color: low ? "var(--vu-red)" : undefined, textShadow: low ? "0 0 12px rgba(224,86,86,0.6)" : undefined }}
+    >
       {mm}:{ss}
     </span>
   );

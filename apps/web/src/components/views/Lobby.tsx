@@ -1,11 +1,13 @@
 "use client";
 
+import { motion } from "motion/react";
 import { MAX_PLAYERS, MIN_PLAYERS } from "@musicphone/shared";
 import { useGameStore } from "@/store/game-store";
 import { ConfigForm } from "@/components/ConfigForm";
-import { PlayerList } from "@/components/PlayerList";
+import { PlayerAvatar } from "@/components/PlayerAvatar";
+import { uiConfirm } from "@/lib/audio/sfx";
 
-/** Pre-game lobby: share code, host tweaks settings, everyone waits to start. */
+/** Pre-game "mixing console": share code, host tweaks settings, START. */
 export function Lobby() {
   const snapshot = useGameStore((s) => s.snapshot)!;
   const startGame = useGameStore((s) => s.startGame);
@@ -14,42 +16,85 @@ export function Lobby() {
 
   const isHost = snapshot.selfId === snapshot.hostId;
   const enoughPlayers = snapshot.players.length >= MIN_PLAYERS;
+  const slots = Array.from({ length: MAX_PLAYERS }, (_, i) => snapshot.players[i] ?? null);
 
   return (
-    <div className="page stack">
-      <div className="spread">
-        <h1 className="brand">
-          Music<span>Phone</span>
-        </h1>
-        <div className="row">
-          <span className="muted">Room</span>
-          <span className="code-pill">{snapshot.code}</span>
-        </div>
-      </div>
-
-      <div className="grid-2">
-        <div className="card stack">
-          <h2>Players ({snapshot.players.length})</h2>
-          <PlayerList players={snapshot.players} hostId={snapshot.hostId} selfId={snapshot.selfId} />
-          <p className="muted">
-            Share the code <strong>{snapshot.code}</strong> with friends. Need {MIN_PLAYERS}–
-            {MAX_PLAYERS} players.
-          </p>
+    <div className="center">
+      <motion.div
+        className="panel console"
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: "easeOut" }}
+      >
+        <div className="console-head">
+          <div>
+            <h1 className="logo" style={{ fontSize: 26, textAlign: "left" }}>
+              Music<span className="accent">Phone</span>
+            </h1>
+            <p className="muted" style={{ fontSize: 12 }}>
+              Share the code · {MIN_PLAYERS}–{MAX_PLAYERS} players
+            </p>
+          </div>
+          <div className="code-led">{snapshot.code}</div>
         </div>
 
-        <div className="card stack">
-          <h2>Settings</h2>
-          <ConfigForm config={snapshot.config} editable={isHost} onChange={updateConfig} />
-          {isHost ? (
-            <button className="btn primary" disabled={!enoughPlayers} onClick={startGame}>
-              {enoughPlayers ? "Start game" : `Waiting for ${MIN_PLAYERS - snapshot.players.length} more`}
+        <div className="strips">
+          {slots.map((p, i) => (
+            <motion.div
+              key={p?.id ?? `empty-${i}`}
+              className={`strip-ch${p ? "" : " empty"}`}
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: i * 0.04, duration: 0.25 }}
+            >
+              {p ? (
+                <>
+                  <PlayerAvatar id={p.id} name={p.name} dim={!p.connected} />
+                  <span className="strip-name">
+                    {p.name}
+                    {p.id === snapshot.selfId && " (you)"}
+                  </span>
+                  <div className="row" style={{ gap: 6 }}>
+                    <span className="led-dot" data-on={p.connected} />
+                    {p.id === snapshot.hostId && <span className="chip">host</span>}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="avatar" style={{ width: 44, height: 44, background: "#2a2d35" }} />
+                  <span className="strip-name muted">open</span>
+                </>
+              )}
+            </motion.div>
+          ))}
+        </div>
+
+        <div className="divider" />
+
+        <ConfigForm config={snapshot.config} editable={isHost} onChange={updateConfig} />
+
+        <div className="spread" style={{ marginTop: 22 }}>
+          <span className="muted" style={{ fontSize: 12 }}>
+            {isHost ? "You are the host" : "Waiting for the host…"}
+          </span>
+          {isHost && (
+            <button
+              className="hw-btn hw-btn--primary"
+              style={{ padding: "14px 26px", fontSize: 15 }}
+              disabled={!enoughPlayers}
+              onClick={() => {
+                uiConfirm();
+                startGame();
+              }}
+            >
+              {enoughPlayers
+                ? "▶ Start game"
+                : `Need ${MIN_PLAYERS - snapshot.players.length} more`}
             </button>
-          ) : (
-            <p className="muted">Waiting for the host to start…</p>
           )}
-          {error && <p className="error">{error}</p>}
         </div>
-      </div>
+        {error && <p className="error">{error}</p>}
+      </motion.div>
     </div>
   );
 }

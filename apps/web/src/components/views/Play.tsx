@@ -7,7 +7,8 @@ import { PianoRoll } from "@/components/PianoRoll";
 import { NotePalette } from "@/components/NotePalette";
 import { TransportControls } from "@/components/TransportControls";
 import { RoundTimer } from "@/components/RoundTimer";
-import { PlayerList } from "@/components/PlayerList";
+import { RoundOverlay } from "@/components/RoundOverlay";
+import { uiClick, uiConfirm } from "@/lib/audio/sfx";
 
 /** Active turn: edit 4 measures continuing the previous player's last measure. */
 export function Play() {
@@ -29,31 +30,54 @@ export function Play() {
   const isFirstRound = snapshot.round === 0;
 
   return (
-    <div className="page stack">
-      <div className="spread">
-        <h1 className="brand">
-          Music<span>Phone</span>
-        </h1>
-        <div className="row">
-          <span className="muted">
-            Round {snapshot.round + 1} / {snapshot.totalRounds}
+    <div className="fill">
+      <RoundOverlay />
+
+      <header className="hud">
+        <span className="hud-title">
+          Music<span className="accent">Phone</span>
+        </span>
+        <div className="row" style={{ gap: 18 }}>
+          <span className="led led-dim" style={{ fontSize: 13 }}>
+            ROUND {snapshot.round + 1}/{snapshot.totalRounds}
           </span>
           <RoundTimer endsAt={snapshot.roundEndsAt} />
+          <span className="chip">#{snapshot.code}</span>
         </div>
-      </div>
+      </header>
 
-      <div className="card stack">
-        <div className="spread">
-          <div>
-            <h2 style={{ margin: 0 }}>
-              {isFirstRound && contextNotes.length === 0
-                ? "Start a fresh melody"
-                : "Continue from the previous measure"}
-            </h2>
-            <p className="muted">
-              The greyed measure on the left is what you were handed — write the next 4 measures.
-            </p>
-          </div>
+      <main className="stage">
+        <div className="stage-head">
+          <h2>
+            {isFirstRound && contextNotes.length === 0
+              ? "Start a fresh melody"
+              : "Continue the melody"}
+          </h2>
+          <span className="muted" style={{ fontSize: 12 }}>
+            The cyan measure on the left is what you were handed — write the next 4.
+          </span>
+        </div>
+
+        <div className="screen stage-screen">
+          <PianoRoll
+            config={config}
+            draft={draft}
+            contextNotes={contextNotes}
+            selectedTimbre={selectedTimbre}
+            onChange={setDraft}
+            playStep={playStep}
+          />
+        </div>
+      </main>
+
+      <footer className="dock">
+        <div className="dock-group" style={{ flexDirection: "column", alignItems: "flex-start" }}>
+          <span className="dock-label">Timbre</span>
+          <NotePalette selected={selectedTimbre} onSelect={setTimbre} />
+        </div>
+
+        <div className="dock-group" style={{ flexDirection: "column", alignItems: "flex-start" }}>
+          <span className="dock-label">Transport</span>
           <div className="row">
             <TransportControls
               notes={draft}
@@ -61,40 +85,35 @@ export function Play() {
               totalSteps={totalSteps}
               onStep={setPlayStep}
             />
+            <button
+              className="hw-btn hw-btn--ghost"
+              onClick={() => {
+                uiClick();
+                clearDraft();
+              }}
+            >
+              Clear
+            </button>
           </div>
         </div>
 
-        <NotePalette selected={selectedTimbre} onSelect={setTimbre} onClear={clearDraft} />
+        <div className="dock-spacer" />
 
-        <PianoRoll
-          config={config}
-          draft={draft}
-          contextNotes={contextNotes}
-          selectedTimbre={selectedTimbre}
-          onChange={setDraft}
-          playStep={playStep}
-        />
-
-        <div className="spread">
-          <span className="muted">
-            {readyCount} / {snapshot.players.length} ready
+        <div className="dock-group" style={{ flexDirection: "column", alignItems: "flex-end" }}>
+          <span className="dock-label">
+            {readyCount}/{snapshot.players.length} ready
           </span>
-          <button className={`btn ${submitted ? "" : "primary"}`} onClick={submitTurn}>
-            {submitted ? "✓ Submitted — update" : "Submit my 4 measures"}
+          <button
+            className={`hw-btn ${submitted ? "" : "hw-btn--primary"}`}
+            onClick={() => {
+              uiConfirm();
+              submitTurn();
+            }}
+          >
+            {submitted ? "✓ Submitted — update" : "Submit melody"}
           </button>
         </div>
-      </div>
-
-      <div className="card stack">
-        <h3 style={{ margin: 0 }}>Players</h3>
-        <PlayerList
-          players={snapshot.players}
-          hostId={snapshot.hostId}
-          selfId={snapshot.selfId}
-          ready={snapshot.ready}
-          showReady
-        />
-      </div>
+      </footer>
     </div>
   );
 }

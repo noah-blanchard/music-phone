@@ -205,7 +205,7 @@ still gets committed at round end. An empty room is reaped after 60s.
 **Game mechanics**
 1. *Timing/rotation:* host-configurable countdown (default 3 min) **+ early Ready**; advances on
    all-ready or timeout (auto-submits the latest autosave).
-2. *Player count:* flexible **3–8**; N players → N melodies of `4·N` measures.
+2. *Player count:* flexible **2–8**; N players → N melodies of `4·N` measures.
 3. *Scale/BPM attribution:* host picks in the lobby (`config:update`), locked at `game:start`.
 4. *Preview of last measure:* greyed **read-only notes on the grid + playback**; only the previous
    single measure is revealed.
