@@ -15,7 +15,10 @@ export function Lobby() {
   const error = useGameStore((s) => s.error);
 
   const isHost = snapshot.selfId === snapshot.hostId;
-  const enoughPlayers = snapshot.players.length >= MIN_PLAYERS;
+  const playerCount = snapshot.players.length;
+  const enoughPlayers = playerCount >= MIN_PLAYERS;
+  const enoughRoles = snapshot.config.selectedRoles.length >= playerCount;
+  const canStart = enoughPlayers && enoughRoles;
   const slots = Array.from({ length: MAX_PLAYERS }, (_, i) => snapshot.players[i] ?? null);
 
   return (
@@ -71,7 +74,12 @@ export function Lobby() {
 
         <div className="divider" />
 
-        <ConfigForm config={snapshot.config} editable={isHost} onChange={updateConfig} />
+        <ConfigForm
+          config={snapshot.config}
+          editable={isHost}
+          playerCount={playerCount}
+          onChange={updateConfig}
+        />
 
         <div className="spread" style={{ marginTop: 22 }}>
           <span className="muted" style={{ fontSize: 12 }}>
@@ -81,15 +89,17 @@ export function Lobby() {
             <button
               className="hw-btn hw-btn--primary"
               style={{ padding: "14px 26px", fontSize: 15 }}
-              disabled={!enoughPlayers}
+              disabled={!canStart}
               onClick={() => {
                 uiConfirm();
                 startGame();
               }}
             >
-              {enoughPlayers
-                ? "▶ Start game"
-                : `Need ${MIN_PLAYERS - snapshot.players.length} more`}
+              {!enoughPlayers
+                ? `Need ${MIN_PLAYERS - playerCount} more`
+                : !enoughRoles
+                  ? `Pick ${playerCount - snapshot.config.selectedRoles.length} more layer kind(s)`
+                  : "▶ Start game"}
             </button>
           )}
         </div>

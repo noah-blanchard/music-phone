@@ -1,17 +1,28 @@
 import {
+  BPM_CHOICES,
   DEFAULT_CONFIG,
+  KEY_CHOICES,
   MAX_PLAYERS,
   MIN_PLAYERS,
+  SCALE_CHOICES,
+  assignWheel,
   getMode,
+  getRole,
   sanitizeConfig,
   type GameConfig,
   type Melody,
   type Note,
   type Player,
+  type Role,
   type Room,
+  type ScaleType,
   type ServerMessage,
 } from "@musicphone/shared";
 import { toSnapshot } from "./serialize";
+
+function pick<T>(arr: readonly T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)]!;
+}
 
 type Sender = (msg: ServerMessage) => void;
 
@@ -82,6 +93,8 @@ export class RoomManager {
       melodies: [],
       roundEndsAt: 0,
       ready: {},
+      assignments: {},
+      wheelOffsetDeg: 0,
       reveal: { activeSong: 0, revealedLayers: 0, playing: false, done: false },
     };
     this.rooms.set(code, room);
@@ -266,28 +279,59 @@ export class RoomManager {
 
     const mode = getMode(room.config.mode);
     const n = room.players.length;
+    const roles = room.config.selectedRoles;
+    if (roles.length < n) return `Select at least ${n} layer kinds (one per player)`;
+
     room.totalRounds = mode.totalRounds(n, room.config);
+    // Each song rolls its own BPM / key / scale (revealed by the slot machine).
     room.melodies = room.players.map<Melody>((p) => ({
       id: randomId(),
       seedPlayerId: p.id,
+      bpm: pick(BPM_CHOICES),
+      root: pick(KEY_CHOICES),
+      scale: pick(SCALE_CHOICES) as ScaleType,
       segments: [],
     }));
+
+    // Wheel of fortune: spin to a random offset, assign each player a distinct
+    // role from the selected set (re-roll on the rare boundary collision).
+    let offsetDeg = 0;
+    let sections: number[] = [];
+    for (let tries = 0; tries < 24; tries++) {
+      offsetDeg = Math.random() * 360;
+      sections = assignWheel(n, roles.length, offsetDeg);
+      if (new Set(sections).size === n) break;
+    }
+    room.wheelOffsetDeg = offsetDeg;
+    room.assignments = {};
+    room.players.forEach((p, i) => {
+      room.assignments[p.id] = roles[sections[i]!] ?? roles[i % roles.length]!;
+    });
+
     room.phase = "playing";
     room.round = 0;
     this.beginRound(code);
     return null;
   }
 
+  /** The role a player was dealt by the wheel (falls back to the first role). */
+  private roleOf(room: Room, playerId: string): Role {
+    return getRole(room.assignments[playerId]) ?? getRole(room.config.selectedRoles[0])!;
+  }
+
   /** Build the per-player `round:started` payload via the active game mode. */
   private roundStartedMsg(room: Room, playerIdx: number): ServerMessage {
     const mode = getMode(room.config.mode);
+    const player = room.players[playerIdx]!;
     const songIdx = mode.assign(playerIdx, room.round, room.players.length);
     const song = room.melodies[songIdx]!;
     return {
       type: "round:started",
       round: room.round,
       contextLayers: mode.buildContext(song, room.round, room.config),
-      role: mode.roleForRound(room.round, room.config),
+      role: this.roleOf(room, player.id),
+      song: { bpm: song.bpm, root: song.root, scale: song.scale },
+      isFirstLayer: song.segments.length === 0,
       endsAt: room.roundEndsAt,
     };
   }
@@ -326,7 +370,7 @@ export class RoomManager {
     const room = this.rooms.get(code);
     const rt = this.runtimes.get(code);
     if (!room || !rt || room.phase !== "playing") return;
-    const clean = getMode(room.config.mode).validateTurn(notes, room.round, room.config);
+    const clean = getMode(room.config.mode).validateTurn(notes, room.config, this.roleOf(room, playerId));
     rt.drafts.set(playerId, clean);
     if (instrumentId) rt.instruments.set(playerId, instrumentId);
   }
@@ -335,7 +379,7 @@ export class RoomManager {
     const room = this.rooms.get(code);
     const rt = this.runtimes.get(code);
     if (!room || !rt || room.phase !== "playing") return;
-    const clean = getMode(room.config.mode).validateTurn(notes, room.round, room.config);
+    const clean = getMode(room.config.mode).validateTurn(notes, room.config, this.roleOf(room, playerId));
     rt.pending.set(playerId, clean);
     rt.drafts.set(playerId, clean);
     if (instrumentId) rt.instruments.set(playerId, instrumentId);
@@ -374,7 +418,6 @@ export class RoomManager {
 
     const mode = getMode(room.config.mode);
     const n = room.players.length;
-    const role = mode.roleForRound(room.round, room.config);
     room.players.forEach((player, idx) => {
       const notes = rt.pending.get(player.id) ?? rt.drafts.get(player.id) ?? [];
       const melody = room.melodies[mode.assign(idx, room.round, n)]!;
@@ -382,7 +425,7 @@ export class RoomManager {
         authorId: player.id,
         authorName: player.name,
         order: room.round,
-        roleId: role?.id,
+        roleId: this.roleOf(room, player.id).id,
         instrumentId: rt.instruments.get(player.id),
         notes,
       });

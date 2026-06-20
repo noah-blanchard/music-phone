@@ -1,5 +1,6 @@
 import type { ClientMessage } from "./messages";
 import { MAX_BARS_PER_SONG, MIN_BARS_PER_SONG, type GameConfig, type Note } from "./types";
+import { LAYER_ROLES } from "./modes/layers";
 
 /**
  * Lightweight runtime validation for untrusted inbound WebSocket payloads.
@@ -66,11 +67,6 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
 export function sanitizeConfig(patch: Partial<GameConfig>, base: GameConfig): GameConfig {
   const next: GameConfig = { ...base };
   if (patch.mode === "layers") next.mode = patch.mode;
-  if (isFiniteInt(patch.bpm)) next.bpm = Math.min(240, Math.max(40, patch.bpm));
-  if (isFiniteInt(patch.root)) next.root = Math.min(84, Math.max(48, patch.root));
-  if (patch.scale === "major" || patch.scale === "minor" || patch.scale === "pentatonic") {
-    next.scale = patch.scale;
-  }
   if (isFiniteInt(patch.barsPerSong)) {
     next.barsPerSong = Math.min(MAX_BARS_PER_SONG, Math.max(MIN_BARS_PER_SONG, patch.barsPerSong));
   }
@@ -80,6 +76,11 @@ export function sanitizeConfig(patch: Partial<GameConfig>, base: GameConfig): Ga
     patch.contextVisibility === "blind"
   ) {
     next.contextVisibility = patch.contextVisibility;
+  }
+  if (Array.isArray(patch.selectedRoles)) {
+    // Keep only known role ids, de-duplicated, in the canonical role order.
+    const wanted = new Set(patch.selectedRoles.filter((r) => typeof r === "string"));
+    next.selectedRoles = LAYER_ROLES.map((r) => r.id).filter((id) => wanted.has(id));
   }
   if (isFiniteInt(patch.roundDurationSec)) {
     next.roundDurationSec = Math.min(600, Math.max(30, patch.roundDurationSec));

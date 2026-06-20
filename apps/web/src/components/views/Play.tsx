@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { LAYER_ROLES, getRole, loopSteps, type Layer, type Role } from "@musicphone/shared";
+import { SCALE_LABELS, getRole, loopSteps, noteLabel, type Layer, type Role } from "@musicphone/shared";
 import { useGameStore } from "@/store/game-store";
 import { PianoRollEditor } from "@/components/editors/PianoRollEditor";
 import { DrumGridEditor } from "@/components/editors/DrumGridEditor";
@@ -54,6 +54,7 @@ export function Play() {
   const snapshot = useGameStore((s) => s.snapshot)!;
   const contextLayers = useGameStore((s) => s.contextLayers);
   const currentRole = useGameStore((s) => s.currentRole);
+  const currentSong = useGameStore((s) => s.currentSong);
   const selectedInstrument = useGameStore((s) => s.selectedInstrument);
   const pitchUnlocked = useGameStore((s) => s.pitchUnlocked);
   const setPitchUnlocked = useGameStore((s) => s.setPitchUnlocked);
@@ -68,7 +69,10 @@ export function Play() {
   const { config } = snapshot;
   const readyCount = snapshot.players.filter((p) => snapshot.ready[p.id]).length;
 
-  const role: Role = currentRole ?? getRole(LAYER_ROLES[snapshot.round]?.id) ?? LAYER_ROLES[0]!;
+  // Role + song come from round:started; fall back to the assignment snapshot.
+  const role = currentRole ?? getRole(snapshot.assignments[snapshot.selfId]);
+  if (!role || !currentSong) return <div className="center muted">Dealing your part…</div>;
+
   const totalSteps = loopSteps(config);
   const playLayersList: Layer[] = [...contextLayers, { roleId: role.id, instrumentId: selectedInstrument, notes: draft }];
 
@@ -95,7 +99,8 @@ export function Play() {
             Add the <span style={{ color: role.color }}>{role.name}</span>
           </h2>
           <span className="muted" style={{ fontSize: 12 }}>
-            {CONTEXT_HINT[config.contextVisibility]} · {config.barsPerSong}-bar loop
+            {noteLabel(currentSong.root).replace(/\d+$/, "")} {SCALE_LABELS[currentSong.scale]} ·{" "}
+            {currentSong.bpm} BPM · {config.barsPerSong}-bar loop · {CONTEXT_HINT[config.contextVisibility]}
           </span>
         </div>
 
@@ -114,6 +119,8 @@ export function Play() {
             <PianoRollEditor
               config={config}
               role={role}
+              songRoot={currentSong.root}
+              songScale={currentSong.scale}
               instrumentId={selectedInstrument}
               unlocked={pitchUnlocked}
               draft={draft}
@@ -135,7 +142,7 @@ export function Play() {
           <span className="dock-label">Transport</span>
           <div className="row">
             <TransportControls
-              config={config}
+              bpm={currentSong.bpm}
               totalSteps={totalSteps}
               layers={playLayersList}
               onStep={setPlayStep}

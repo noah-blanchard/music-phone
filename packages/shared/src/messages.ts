@@ -1,4 +1,4 @@
-import type { GameConfig, Melody, Note, RoomSnapshot } from "./types";
+import type { GameConfig, Melody, Note, RoomSnapshot, ScaleType } from "./types";
 import type { Layer, Role } from "./modes/types";
 
 /**
@@ -78,8 +78,12 @@ export interface MsgRoundStarted {
   round: number;
   /** Read-only prior layers shown as context (0..many per the host setting). */
   contextLayers: Layer[];
-  /** The role to fill this round. */
+  /** The player's wheel-assigned role (constant across rounds). */
   role: Role;
+  /** The assigned song's musical params (per-song, set at game start). */
+  song: { bpm: number; root: number; scale: ScaleType };
+  /** True when the assigned song has no layers yet (round 0 → slot machine). */
+  isFirstLayer: boolean;
   /** Epoch milliseconds at which this round auto-advances. */
   endsAt: number;
 }

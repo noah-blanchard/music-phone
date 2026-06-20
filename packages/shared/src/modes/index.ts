@@ -3,7 +3,7 @@ import type { GameMode } from "./types";
 import { layersMode } from "./layers";
 
 export * from "./types";
-export { LAYER_ROLES, MAX_DRUM_VOICES, getRole, roleOfSegment, rotate } from "./layers";
+export { LAYER_ROLES, MAX_DRUM_VOICES, getRole, roleOfSegment, rotate, assignWheel } from "./layers";
 
 /** Registry of all game modes. Add a mode = add a module + an entry here. */
 export const MODES: Record<GameModeId, GameMode> = {

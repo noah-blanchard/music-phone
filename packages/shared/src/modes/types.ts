@@ -52,12 +52,10 @@ export interface GameMode {
   totalRounds(playerCount: number, config: GameConfig): number;
   /** Which song a player edits in a given round. */
   assign(playerIndex: number, round: number, n: number): number;
-  /** The role for a round. */
-  roleForRound(round: number, config: GameConfig): Role;
   /** Read-only prior layers for the player editing `song` this round. */
   buildContext(song: Melody, round: number, config: GameConfig): Layer[];
   /** Number of editable steps in a turn for this mode. */
   turnSteps(config: GameConfig): number;
-  /** Validate + normalize a submitted turn for the round's role/geometry. */
-  validateTurn(notes: unknown, round: number, config: GameConfig): Note[];
+  /** Validate + normalize a submitted turn for the player's role/geometry. */
+  validateTurn(notes: unknown, config: GameConfig, role: Role): Note[];
 }

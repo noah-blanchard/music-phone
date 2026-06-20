@@ -55,6 +55,12 @@ export interface Segment {
 export interface Melody {
   id: string;
   seedPlayerId: string;
+  /** Per-song tempo, rolled randomly at game start (slot machine). */
+  bpm: number;
+  /** Per-song root pitch (MIDI), rolled randomly at game start. */
+  root: number;
+  /** Per-song scale, rolled randomly at game start. */
+  scale: ScaleType;
   segments: Segment[];
 }
 
@@ -71,16 +77,14 @@ export type Phase = "lobby" | "playing" | "results";
 export interface GameConfig {
   /** Which game mode is played. */
   mode: GameModeId;
-  bpm: number;
-  /** Root pitch class as a MIDI number in the base octave (e.g. 60 = C4). */
-  root: number;
-  scale: ScaleType;
   /** Fixed at 16 (16th notes). */
   stepsPerMeasure: number;
   /** Length of the shared loop every layer is written over (2–8 bars). */
   barsPerSong: number;
   /** How much prior work a player sees at turn start. */
   contextVisibility: ContextVisibility;
+  /** Role ids the host enabled for the wheel (must be >= player count to start). */
+  selectedRoles: string[];
   /** Round countdown length in seconds. */
   roundDurationSec: number;
 }
@@ -101,6 +105,10 @@ export interface Room {
   roundEndsAt: number;
   /** Per-player ready flag for the current round, keyed by playerId. */
   ready: Record<string, boolean>;
+  /** Wheel-assigned role per player (playerId → roleId), set at game start. */
+  assignments: Record<string, string>;
+  /** Final wheel rotation in degrees, for the synced spin animation. */
+  wheelOffsetDeg: number;
   /**
    * Results-only: the single, room-wide "guided reveal" cursor. One song is
    * presented at a time, driven by that song's seed player (its author).
@@ -141,24 +149,48 @@ export interface RoomSnapshot {
    * Empty during lobby/playing.
    */
   melodies: Melody[];
+  /** Wheel-assigned role per player (playerId → roleId). */
+  assignments: Record<string, string>;
+  /** Final wheel rotation in degrees, for the synced spin animation. */
+  wheelOffsetDeg: number;
   /** Room-wide guided-reveal cursor (results phase only). */
   reveal: RevealState;
 }
 
+/**
+ * Canonical layer-role ids (must mirror `LAYER_ROLES` in `modes/layers.ts`).
+ * Kept here so `DEFAULT_CONFIG` can default to "all roles" without a circular
+ * import; `sanitizeConfig` filters selections against the real role table.
+ */
+export const DEFAULT_SELECTED_ROLES = [
+  "melody",
+  "chords",
+  "bass",
+  "drums",
+  "arp",
+  "pad",
+  "lead",
+  "perc",
+];
+
 /** Default game configuration applied when a host creates a room. */
 export const DEFAULT_CONFIG: GameConfig = {
   mode: "layers",
-  bpm: 100,
-  root: 60, // C4
-  scale: "major",
   stepsPerMeasure: 16,
   barsPerSong: 4,
   contextVisibility: "previous",
+  selectedRoles: [...DEFAULT_SELECTED_ROLES],
   roundDurationSec: 180,
 };
 
 export const MIN_PLAYERS = 2;
 export const MAX_PLAYERS = 8;
+
+/** Slot-machine pools — each song rolls one value from each at game start. */
+export const BPM_CHOICES = [80, 90, 100, 110, 120, 130, 140];
+/** Candidate root pitches (MIDI 60..71 = C4..B4). */
+export const KEY_CHOICES = Array.from({ length: 12 }, (_, i) => 60 + i);
+export const SCALE_CHOICES: ScaleType[] = ["major", "minor", "pentatonic"];
 
 export const MIN_BARS_PER_SONG = 2;
 export const MAX_BARS_PER_SONG = 8;

@@ -142,7 +142,7 @@ function ActiveSong({
       await ensureAudio();
       if (cancelled) return;
       const layers = stackLayers(song, revealed).filter((_, i) => !muted.has(i));
-      handleRef.current = playLayers(layers, config.bpm, loopLength(config), { loop: true, onStep: setStep });
+      handleRef.current = playLayers(layers, song.bpm, loopLength(config), { loop: true, onStep: setStep });
     })();
     return () => {
       cancelled = true;
@@ -150,7 +150,7 @@ function ActiveSong({
       handleRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playing, revealed, muted, song.id, config.bpm, config.barsPerSong, config.stepsPerMeasure]);
+  }, [playing, revealed, muted, song.id, song.bpm, config.barsPerSong, config.stepsPerMeasure]);
 
   useEffect(() => () => handleRef.current?.stop(), []);
 
@@ -245,7 +245,7 @@ function FreeSong({ song, index, config }: { song: Melody; index: number; config
     uiClick();
     if (playing) return stop();
     setPlaying(true);
-    handleRef.current = playLayers(stackLayers(song), config.bpm, loopLength(config), { loop: true });
+    handleRef.current = playLayers(stackLayers(song), song.bpm, loopLength(config), { loop: true });
   };
   useEffect(() => () => handleRef.current?.stop(), []);
 

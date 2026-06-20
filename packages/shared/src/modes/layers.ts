@@ -102,21 +102,35 @@ function buildLayerContext(song: Melody, config: GameConfig): Layer[] {
   return [];
 }
 
-/** "Layered Arrangement": each round adds a different role over the same loop. */
+/**
+ * Wheel-of-fortune assignment. Player avatars sit evenly around the rim
+ * (avatar `i` at `360*i/n`); the wheel of `m` role sections (each `360/m` wide)
+ * rests at `offsetDeg`. Returns, per avatar, the section index it lands on.
+ * Distinct for every avatar when `m >= n` (even spacing); the caller re-rolls
+ * `offsetDeg` on the rare floating-point boundary collision.
+ */
+export function assignWheel(playerCount: number, roleCount: number, offsetDeg: number): number[] {
+  const sectionDeg = 360 / roleCount;
+  const out: number[] = [];
+  for (let i = 0; i < playerCount; i++) {
+    const avatarDeg = (360 * i) / playerCount;
+    // Section whose centre is nearest the avatar after the wheel rotates by offsetDeg.
+    const k = Math.round((avatarDeg - offsetDeg - sectionDeg / 2) / sectionDeg);
+    out.push(((k % roleCount) + roleCount) % roleCount);
+  }
+  return out;
+}
+
+/** "Layered Arrangement": each player owns one role and adds it to every song. */
 export const layersMode: GameMode = {
   id: "layers",
   name: "Layered Arrangement",
   description:
-    "Build one looped song together: each round a different player adds a new part — melody, chords, bass, drums…",
+    "Build looped songs together: each player is dealt one part — melody, chords, bass, drums… — and lays it on every song.",
   totalRounds: (playerCount) => playerCount,
   assign: rotate,
-  roleForRound: (round) => LAYER_ROLES[round] ?? LAYER_ROLES[0]!,
   buildContext: (song, _round, config) => buildLayerContext(song, config),
   turnSteps: (config) => loopSteps(config),
-  validateTurn: (notes, round, config) => {
-    const role = LAYER_ROLES[round] ?? LAYER_ROLES[0]!;
-    return role.editor === "drum-grid"
-      ? validateDrums(notes, config)
-      : validatePitched(notes, config);
-  },
+  validateTurn: (notes, config, role) =>
+    role.editor === "drum-grid" ? validateDrums(notes, config) : validatePitched(notes, config),
 };

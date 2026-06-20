@@ -18,6 +18,8 @@ export function toSnapshot(room: Room, selfId: string): RoomSnapshot {
     ready: room.ready,
     selfId,
     melodies: room.phase === "results" ? room.melodies : [],
+    assignments: room.assignments,
+    wheelOffsetDeg: room.wheelOffsetDeg,
     reveal: room.reveal,
   };
 }

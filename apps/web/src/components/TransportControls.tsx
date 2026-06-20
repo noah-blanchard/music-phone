@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { GameConfig, Layer } from "@musicphone/shared";
+import type { Layer } from "@musicphone/shared";
 import { ensureAudio, playLayers, type PlayHandle } from "@/lib/audio/engine";
 
 interface Props {
-  config: GameConfig;
+  /** Tempo of the song being edited. */
+  bpm: number;
   totalSteps: number;
   /** Stacked layers (each played through its role instrument / kit). */
   layers: Layer[];
@@ -13,7 +14,7 @@ interface Props {
 }
 
 /** Play/stop the current draft (with its context layers) through Tone.js. */
-export function TransportControls({ config, totalSteps, layers, onStep }: Props) {
+export function TransportControls({ bpm, totalSteps, layers, onStep }: Props) {
   const [playing, setPlaying] = useState(false);
   const handleRef = useRef<PlayHandle | null>(null);
 
@@ -33,7 +34,7 @@ export function TransportControls({ config, totalSteps, layers, onStep }: Props)
       return;
     }
     setPlaying(true);
-    handleRef.current = playLayers(layers, config.bpm, totalSteps, {
+    handleRef.current = playLayers(layers, bpm, totalSteps, {
       onStep: (s) => onStep?.(s),
       onEnd: stop,
     });

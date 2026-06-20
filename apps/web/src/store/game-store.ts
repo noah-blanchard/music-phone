@@ -7,10 +7,18 @@ import type {
   Note,
   Role,
   RoomSnapshot,
+  ScaleType,
   ServerMessage,
 } from "@musicphone/shared";
 import { roleDefaultSound } from "@musicphone/shared";
 import { wsUrl } from "@/lib/eden";
+
+/** Per-song musical params handed to the local player this round. */
+export interface SongParams {
+  bpm: number;
+  root: number;
+  scale: ScaleType;
+}
 
 /**
  * Single source of client state. Owns the WebSocket (kept outside React state
@@ -23,6 +31,10 @@ interface GameState {
   contextLayers: Layer[];
   /** The role to fill this round. */
   currentRole: Role | null;
+  /** The assigned song's musical params this round. */
+  currentSong: SongParams | null;
+  /** Whether this round's song is empty (round 0 → slot machine). */
+  isFirstLayer: boolean;
   /** Chosen sound id (instrument or kit) for the current layer. */
   selectedInstrument: string;
   /** Whether the local player unlocked out-of-scale placement this round. */
@@ -67,6 +79,8 @@ export const useGameStore = create<GameState>((set, get) => ({
   snapshot: null,
   contextLayers: [],
   currentRole: null,
+  currentSong: null,
+  isFirstLayer: false,
   selectedInstrument: "",
   pitchUnlocked: false,
   submitted: false,
@@ -128,6 +142,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       draft: [],
       contextLayers: [],
       currentRole: null,
+      currentSong: null,
       finishedMelodies: [],
     });
   },
@@ -181,6 +196,8 @@ function dispatch(
       set((s) => ({
         contextLayers: msg.contextLayers,
         currentRole: msg.role,
+        currentSong: msg.song,
+        isFirstLayer: msg.isFirstLayer,
         selectedInstrument: roleDefaultSound(msg.role),
         pitchUnlocked: false,
         submitted: false,

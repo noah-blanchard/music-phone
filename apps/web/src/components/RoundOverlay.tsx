@@ -1,51 +1,59 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useGameStore } from "@/store/game-store";
 import { countdownBlip } from "@/lib/audio/sfx";
+import { WheelOfFortune } from "@/components/WheelOfFortune";
+import { SlotMachine } from "@/components/SlotMachine";
 
-type Stage = "splash" | 3 | 2 | 1 | 0 | null;
+type Stage = "wheel" | "slot" | "splash" | 3 | 2 | 1 | 0 | null;
 
 /**
- * Cinematic round intro: a "ROUND n / N" splash, then a 3·2·1·GO countdown,
- * fired whenever the store's roundCue increments (i.e. on round:started).
+ * Round intro orchestrator. Round 0 runs the full ceremony — role-draft Wheel →
+ * per-song Slot machine → 3·2·1 — then play. Later rounds keep the splash +
+ * countdown. Fired whenever `roundCue` increments (on round:started).
  */
 export function RoundOverlay() {
   const roundCue = useGameStore((s) => s.roundCue);
   const snapshot = useGameStore((s) => s.snapshot);
   const currentRole = useGameStore((s) => s.currentRole);
+  const currentSong = useGameStore((s) => s.currentSong);
   const reduce = useReducedMotion();
   const [stage, setStage] = useState<Stage>(null);
+  const timeouts = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  const clearAll = useCallback(() => {
+    timeouts.current.forEach(clearTimeout);
+    timeouts.current = [];
+  }, []);
+
+  const beginCountdown = useCallback(() => {
+    const tick = reduce ? 120 : 700;
+    const at = (ms: number, fn: () => void) => timeouts.current.push(setTimeout(fn, ms));
+    setStage(3);
+    countdownBlip(3);
+    at(tick, () => (setStage(2), countdownBlip(2)));
+    at(tick * 2, () => (setStage(1), countdownBlip(1)));
+    at(tick * 3, () => (setStage(0), countdownBlip(0)));
+    at(tick * 4, () => setStage(null));
+  }, [reduce]);
+
+  const hasIntro =
+    !!snapshot && Object.keys(snapshot.assignments).length > 0 && !!currentSong;
 
   useEffect(() => {
-    if (roundCue === 0) return;
-    // Compressed timeline when the user prefers reduced motion.
-    const base = reduce ? 250 : 1100;
-    const tick = reduce ? 120 : 700;
-    const t: ReturnType<typeof setTimeout>[] = [];
-    const at = (ms: number, fn: () => void) => t.push(setTimeout(fn, ms));
-
-    setStage("splash");
-    at(base, () => {
-      setStage(3);
-      countdownBlip(3);
-    });
-    at(base + tick, () => {
-      setStage(2);
-      countdownBlip(2);
-    });
-    at(base + tick * 2, () => {
-      setStage(1);
-      countdownBlip(1);
-    });
-    at(base + tick * 3, () => {
-      setStage(0);
-      countdownBlip(0);
-    });
-    at(base + tick * 4, () => setStage(null));
-    return () => t.forEach(clearTimeout);
-  }, [roundCue, reduce]);
+    if (roundCue === 0 || !snapshot) return;
+    clearAll();
+    if (snapshot.round === 0 && hasIntro) {
+      setStage("wheel"); // → slot → countdown, via child onDone callbacks
+    } else {
+      setStage("splash");
+      timeouts.current.push(setTimeout(beginCountdown, reduce ? 250 : 1100));
+    }
+    return clearAll;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roundCue]);
 
   if (!snapshot) return null;
   const round = snapshot.round + 1;
@@ -61,7 +69,18 @@ export function RoundOverlay() {
           exit={{ opacity: 0 }}
           transition={{ duration: reduce ? 0 : 0.25 }}
         >
-          {stage === "splash" ? (
+          {stage === "wheel" && currentSong ? (
+            <WheelOfFortune
+              players={snapshot.players}
+              selectedRoles={snapshot.config.selectedRoles}
+              assignments={snapshot.assignments}
+              wheelOffsetDeg={snapshot.wheelOffsetDeg}
+              selfId={snapshot.selfId}
+              onDone={() => setStage("slot")}
+            />
+          ) : stage === "slot" && currentSong ? (
+            <SlotMachine song={currentSong} onDone={beginCountdown} />
+          ) : stage === "splash" ? (
             <motion.div
               key="splash"
               initial={{ scale: 0.85, opacity: 0 }}
@@ -71,12 +90,10 @@ export function RoundOverlay() {
               <div className="overlay-round">
                 ROUND {round} / {total}
               </div>
-              {currentRole ? (
+              {currentRole && (
                 <div className="overlay-sub" style={{ color: currentRole.color }}>
                   ▣ Your part: {currentRole.name}
                 </div>
-              ) : (
-                <div className="overlay-sub">♪ a melody arrives ♪</div>
               )}
             </motion.div>
           ) : (

@@ -14,6 +14,7 @@ import {
   type Layer,
   type Note,
   type Role,
+  type ScaleType,
 } from "@musicphone/shared";
 import { ensureAudio, previewInstrument } from "@/lib/audio/engine";
 
@@ -23,6 +24,9 @@ const ROW_H = 22; // fixed row height — the roll scrolls instead of squishing
 interface Props {
   config: GameConfig;
   role: Role;
+  /** The active song's key (root MIDI) and scale — scale-lock + scroll focus. */
+  songRoot: number;
+  songScale: ScaleType;
   /** Sound id used for placement preview. */
   instrumentId: string;
   /** When true, out-of-scale notes are placeable (scale-lock off). */
@@ -43,6 +47,8 @@ interface Props {
 export function PianoRollEditor({
   config,
   role,
+  songRoot,
+  songScale,
   instrumentId,
   unlocked,
   draft,
@@ -56,10 +62,10 @@ export function PianoRollEditor({
   );
   const inScale = useCallback(
     (p: number) => {
-      const cls = ((p - config.root) % 12 + 12) % 12;
-      return SCALE_INTERVALS[config.scale].includes(cls);
+      const cls = ((p - songRoot) % 12 + 12) % 12;
+      return SCALE_INTERVALS[songScale].includes(cls);
     },
-    [config.root, config.scale],
+    [songRoot, songScale],
   );
   const editSteps = loopSteps(config);
   const rows = pitches.length;
@@ -87,11 +93,11 @@ export function PianoRollEditor({
   useLayoutEffect(() => {
     const sc = scrollRef.current;
     if (!sc) return;
-    const focusPitch = config.root + role.octaveOffset * 12 + Math.round(role.octaves * 6);
+    const focusPitch = songRoot + role.octaveOffset * 12 + Math.round(role.octaves * 6);
     let idx = pitches.indexOf(focusPitch);
     if (idx < 0) idx = Math.round(rows / 2);
     sc.scrollTop = Math.max(0, idx * ROW_H - sc.clientHeight / 2);
-  }, [config.root, role.octaveOffset, role.octaves, pitches, rows]);
+  }, [songRoot, role.octaveOffset, role.octaves, pitches, rows]);
 
   const locate = useCallback(
     (clientX: number, clientY: number): { pitch: number; step: number } | null => {
@@ -189,7 +195,7 @@ export function PianoRollEditor({
             const cls = locked ? "locked" : lit ? "lit" : isBlackKey(p) ? "black" : "white";
             return (
               <div key={p} className={`pr-key ${cls}`} style={{ top: r * ROW_H, height: ROW_H }}>
-                {p % 12 === config.root % 12 ? noteLabel(p) : ""}
+                {p % 12 === songRoot % 12 ? noteLabel(p) : ""}
               </div>
             );
           })}
@@ -202,7 +208,7 @@ export function PianoRollEditor({
               {pitches.map((p, r) => {
                 const locked = !unlocked && !inScale(p);
                 const offscale = unlocked && !inScale(p);
-                const isRoot = p % 12 === config.root % 12;
+                const isRoot = p % 12 === songRoot % 12;
                 const cls = locked
                   ? "locked"
                   : `in-scale${isRoot ? " root" : ""}${offscale ? " offscale" : ""}${r % 2 ? " alt" : ""}`;
