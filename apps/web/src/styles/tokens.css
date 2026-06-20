@@ -33,12 +33,6 @@
   --vu-red: #e05656;
   --danger: #e0563f;
 
-  /* Timbre neon colors (glow versions of the V1 palette) */
-  --t-sine: #4fd0ff;
-  --t-triangle: #4ee6a0;
-  --t-sawtooth: #ffae42;
-  --t-square: #e36cc4;
-
   /* Radii */
   --r-sm: 6px;
   --r-md: 10px;

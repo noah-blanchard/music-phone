@@ -1,17 +1,11 @@
 import type { ClientMessage } from "./messages";
-import {
-  MAX_BARS_PER_SONG,
-  MIN_BARS_PER_SONG,
-  TIMBRES,
-  type GameConfig,
-  type Note,
-} from "./types";
-import { isInScale } from "./scales";
+import { MAX_BARS_PER_SONG, MIN_BARS_PER_SONG, type GameConfig, type Note } from "./types";
 
 /**
  * Lightweight runtime validation for untrusted inbound WebSocket payloads.
  * Kept dependency-free (no zod) so the shared package stays portable between
- * the Bun server and the Next.js client.
+ * the Bun server and the Next.js client. Note payloads are validated per-role
+ * by the active game mode's `validateTurn`.
  */
 
 function isObject(v: unknown): v is Record<string, unknown> {
@@ -25,33 +19,6 @@ function isFiniteInt(v: unknown): v is number {
 /** Accept a short sound-id string (instrument or kit), else undefined. */
 function cleanInstrumentId(v: unknown): string | undefined {
   return typeof v === "string" && v.length > 0 && v.length <= 40 ? v : undefined;
-}
-
-/** Validate and normalize a single note against the active config. */
-export function validateNote(v: unknown, config: GameConfig): Note | null {
-  if (!isObject(v)) return null;
-  const { pitch, start, length, timbre } = v;
-  if (!isFiniteInt(pitch) || !isFiniteInt(start) || !isFiniteInt(length)) return null;
-  if (typeof timbre !== "string" || !TIMBRES.includes(timbre as Note["timbre"])) return null;
-
-  const maxStart = config.stepsPerMeasure * config.measuresPerTurn;
-  if (start < 0 || start >= maxStart) return null;
-  if (length < 1 || start + length > maxStart) return null;
-  if (!isInScale(pitch, config)) return null;
-
-  return { pitch, start, length, timbre: timbre as Note["timbre"] };
-}
-
-/** Validate a notes array, dropping any invalid entries. Caps the count. */
-export function validateNotes(v: unknown, config: GameConfig, max = 512): Note[] {
-  if (!Array.isArray(v)) return [];
-  const out: Note[] = [];
-  for (const item of v) {
-    const note = validateNote(item, config);
-    if (note) out.push(note);
-    if (out.length >= max) break;
-  }
-  return out;
 }
 
 /**
@@ -98,7 +65,7 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
 /** Clamp a partial config update into safe bounds. */
 export function sanitizeConfig(patch: Partial<GameConfig>, base: GameConfig): GameConfig {
   const next: GameConfig = { ...base };
-  if (patch.mode === "continue" || patch.mode === "layers") next.mode = patch.mode;
+  if (patch.mode === "layers") next.mode = patch.mode;
   if (isFiniteInt(patch.bpm)) next.bpm = Math.min(240, Math.max(40, patch.bpm));
   if (isFiniteInt(patch.root)) next.root = Math.min(84, Math.max(48, patch.root));
   if (patch.scale === "major" || patch.scale === "minor" || patch.scale === "pentatonic") {

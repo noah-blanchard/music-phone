@@ -59,7 +59,7 @@ export function DrumGridEditor({ config, role, instrumentId, draft, contextLayer
         onChange(draftRef.current.filter((n) => n !== existing));
         return;
       }
-      onChange([...draftRef.current, { pitch: lane, start: step, length: 1, timbre: "sine" }]);
+      onChange([...draftRef.current, { pitch: lane, start: step, length: 1 }]);
       void ensureAudio().then(() => previewDrum(instrumentId, lane));
     },
     [cellW, rowH, rows, editSteps, onChange, instrumentId],

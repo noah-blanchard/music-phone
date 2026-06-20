@@ -61,7 +61,7 @@ export default function Home() {
           >
             Music<span className="accent">Phone</span>
           </motion.div>
-          <p className="tagline">Pass the melody around. Continue what you hear.</p>
+          <p className="tagline">Build a song together — one layer at a time.</p>
         </div>
 
         <label className="field">

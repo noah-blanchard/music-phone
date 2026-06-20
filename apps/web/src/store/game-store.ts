@@ -8,7 +8,6 @@ import type {
   Role,
   RoomSnapshot,
   ServerMessage,
-  Timbre,
 } from "@musicphone/shared";
 import { roleDefaultSound } from "@musicphone/shared";
 import { wsUrl } from "@/lib/eden";
@@ -20,11 +19,9 @@ import { wsUrl } from "@/lib/eden";
 
 interface GameState {
   snapshot: RoomSnapshot | null;
-  /** Read-only trailing measure handed to the local player (continue mode). */
-  contextNotes: Note[];
-  /** Read-only prior layers handed to the local player (layers mode). */
+  /** Read-only prior layers handed to the local player. */
   contextLayers: Layer[];
-  /** The role to fill this round (layers mode); null otherwise. */
+  /** The role to fill this round. */
   currentRole: Role | null;
   /** Chosen sound id (instrument or kit) for the current layer. */
   selectedInstrument: string;
@@ -32,11 +29,10 @@ interface GameState {
   pitchUnlocked: boolean;
   /** Whether the local player has submitted the current round. */
   submitted: boolean;
-  /** Finished melodies, populated on game:finished. */
+  /** Finished songs, populated on game:finished. */
   finishedMelodies: Melody[];
   /** Local, editable notes for the current turn. */
   draft: Note[];
-  selectedTimbre: Timbre;
   connected: boolean;
   error: string | null;
   /** Increments on each round:started — drives the countdown overlay. */
@@ -47,7 +43,6 @@ interface GameState {
 
   setDraft: (notes: Note[]) => void;
   clearDraft: () => void;
-  setTimbre: (timbre: Timbre) => void;
   setInstrument: (instrumentId: string) => void;
   setPitchUnlocked: (unlocked: boolean) => void;
 
@@ -70,7 +65,6 @@ function send(msg: ClientMessage): void {
 
 export const useGameStore = create<GameState>((set, get) => ({
   snapshot: null,
-  contextNotes: [],
   contextLayers: [],
   currentRole: null,
   selectedInstrument: "",
@@ -78,7 +72,6 @@ export const useGameStore = create<GameState>((set, get) => ({
   submitted: false,
   finishedMelodies: [],
   draft: [],
-  selectedTimbre: "sine",
   connected: false,
   error: null,
   roundCue: 0,
@@ -133,7 +126,6 @@ export const useGameStore = create<GameState>((set, get) => ({
       snapshot: null,
       connected: false,
       draft: [],
-      contextNotes: [],
       contextLayers: [],
       currentRole: null,
       finishedMelodies: [],
@@ -154,7 +146,6 @@ export const useGameStore = create<GameState>((set, get) => ({
     send({ type: "turn:autosave", notes: [], instrumentId: get().selectedInstrument });
   },
 
-  setTimbre: (timbre) => set({ selectedTimbre: timbre }),
   setInstrument: (instrumentId) => {
     set({ selectedInstrument: instrumentId });
     // Persist the choice even if the draft isn't edited again before submit.
@@ -188,10 +179,9 @@ function dispatch(
       // A new turn begins: load the read-only context, clear local work, reset
       // per-round UI state, and bump the cue so the countdown overlay fires.
       set((s) => ({
-        contextNotes: msg.context.kind === "trailing-measure" ? msg.context.notes : [],
-        contextLayers: msg.context.kind === "layers" ? msg.context.layers : [],
+        contextLayers: msg.contextLayers,
         currentRole: msg.role,
-        selectedInstrument: msg.role ? roleDefaultSound(msg.role) : "",
+        selectedInstrument: roleDefaultSound(msg.role),
         pitchUnlocked: false,
         submitted: false,
         draft: [],

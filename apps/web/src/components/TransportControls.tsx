@@ -1,26 +1,23 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { GameConfig, Layer, Note } from "@musicphone/shared";
-import { ensureAudio, playLayers, playNotes, type PlayHandle } from "@/lib/audio/engine";
+import type { GameConfig, Layer } from "@musicphone/shared";
+import { ensureAudio, playLayers, type PlayHandle } from "@/lib/audio/engine";
 
 interface Props {
   config: GameConfig;
   totalSteps: number;
-  /** Continue mode: a flat per-note-timbre list. */
-  notes?: Note[];
-  /** Layers mode: stacked layers (each played through its role instrument). */
-  layers?: Layer[];
+  /** Stacked layers (each played through its role instrument / kit). */
+  layers: Layer[];
   onStep?: (step: number | null) => void;
 }
 
-/** Play/stop the current draft locally through Tone.js (hardware button). */
-export function TransportControls({ config, totalSteps, notes, layers, onStep }: Props) {
+/** Play/stop the current draft (with its context layers) through Tone.js. */
+export function TransportControls({ config, totalSteps, layers, onStep }: Props) {
   const [playing, setPlaying] = useState(false);
   const handleRef = useRef<PlayHandle | null>(null);
 
-  const isLayers = layers != null;
-  const hasContent = isLayers ? layers.some((l) => l.notes.length > 0) : (notes?.length ?? 0) > 0;
+  const hasContent = layers.some((l) => l.notes.length > 0);
 
   const stop = () => {
     handleRef.current?.stop();
@@ -36,9 +33,10 @@ export function TransportControls({ config, totalSteps, notes, layers, onStep }:
       return;
     }
     setPlaying(true);
-    handleRef.current = isLayers
-      ? playLayers(layers, config.bpm, totalSteps, { onStep: (s) => onStep?.(s), onEnd: stop })
-      : playNotes(notes ?? [], config.bpm, totalSteps, { onStep: (s) => onStep?.(s), onEnd: stop });
+    handleRef.current = playLayers(layers, config.bpm, totalSteps, {
+      onStep: (s) => onStep?.(s),
+      onEnd: stop,
+    });
   };
 
   useEffect(() => () => handleRef.current?.stop(), []);

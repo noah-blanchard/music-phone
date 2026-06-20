@@ -28,7 +28,6 @@ const app = new Elysia()
         nickname: t.String({ minLength: 1, maxLength: 20 }),
         config: t.Optional(
           t.Object({
-            mode: t.Optional(t.Union([t.Literal("continue"), t.Literal("layers")])),
             bpm: t.Optional(t.Number()),
             root: t.Optional(t.Number()),
             scale: t.Optional(

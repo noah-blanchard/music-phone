@@ -4,8 +4,8 @@
  * Conventions:
  * - `pitch` is a MIDI note number (e.g. 60 = middle C).
  * - `start` / `length` are expressed in grid steps. With 16th-note resolution
- *   there are `stepsPerMeasure` (16) steps per measure and `STEPS_PER_TURN`
- *   (= stepsPerMeasure * measuresPerTurn = 64) steps in a single 4-measure turn.
+ *   there are `stepsPerMeasure` (16) steps per measure, so one loop is
+ *   `stepsPerMeasure * barsPerSong` steps (see `loopSteps`).
  */
 
 export type ScaleType = "major" | "minor" | "pentatonic";
@@ -14,43 +14,34 @@ export type ScaleType = "major" | "minor" | "pentatonic";
  * Identifies a game mode. Modes are plug-in modules (see `src/modes/`): adding a
  * mode means adding a module + a registry entry and extending this union.
  */
-export type GameModeId = "continue" | "layers";
+export type GameModeId = "layers";
 
 /**
- * How much of the prior work a player is shown when their turn starts (layers
- * mode). `previous` = only the single most recent layer, `all` = everything so
- * far, `blind` = nothing.
+ * How much of the prior work a player is shown when their turn starts. `previous`
+ * = only the single most recent layer, `all` = everything so far, `blind` = nothing.
  */
 export type ContextVisibility = "previous" | "all" | "blind";
 
-/** The four built-in Tone.js oscillator timbres available in V1. */
-export type Timbre = "sine" | "triangle" | "sawtooth" | "square";
-
-export const TIMBRES: readonly Timbre[] = ["sine", "triangle", "sawtooth", "square"];
-
-/** A single note placed on the piano roll during one turn. */
+/** A single note placed on the grid. For drum lanes `pitch` is the lane index. */
 export interface Note {
-  /** MIDI note number, constrained to the active scale. */
+  /** MIDI note number (pitched roles) or drum-lane index (drum roles). */
   pitch: number;
-  /** Start position in steps, relative to the start of the turn (0-based). */
+  /** Start position in steps, relative to the start of the loop (0-based). */
   start: number;
   /** Duration in steps (>= 1). */
   length: number;
-  /** Which oscillator timbre plays this note. */
-  timbre: Timbre;
 }
 
 /**
- * One player's contribution to a song. In `continue` mode this is a 4-measure
- * turn appended in time; in `layers` mode it is a full-loop layer for one role
- * (all segments share the same bars and stack simultaneously).
+ * One player's contribution to a song: a full-loop layer for one role. All
+ * segments of a song share the same bars and stack simultaneously.
  */
 export interface Segment {
   authorId: string;
   authorName: string;
-  /** Position within the song: turn index in `continue`, layer index in `layers`. */
+  /** Layer index within the song (0-based = round). */
   order: number;
-  /** The role this layer fills (layers mode). Absent in `continue`. */
+  /** The role this layer fills. */
   roleId?: string;
   /**
    * The sound the author chose for this layer: an instrument id for pitched
@@ -60,7 +51,7 @@ export interface Segment {
   notes: Note[];
 }
 
-/** A melody that grows by one segment each rotation round. */
+/** A song that gains one stacked layer (segment) each rotation round. */
 export interface Melody {
   id: string;
   seedPlayerId: string;
@@ -78,7 +69,7 @@ export type Phase = "lobby" | "playing" | "results";
 
 /** Immutable-once-started configuration chosen by the host. */
 export interface GameConfig {
-  /** Which game mode is played. Defaults to "layers". */
+  /** Which game mode is played. */
   mode: GameModeId;
   bpm: number;
   /** Root pitch class as a MIDI number in the base octave (e.g. 60 = C4). */
@@ -86,14 +77,10 @@ export interface GameConfig {
   scale: ScaleType;
   /** Fixed at 16 (16th notes). */
   stepsPerMeasure: number;
-  /** `continue` mode: how many new measures a turn appends. */
-  measuresPerTurn: number;
-  /** `layers` mode: length of the shared loop every layer is written over (2–8). */
+  /** Length of the shared loop every layer is written over (2–8 bars). */
   barsPerSong: number;
-  /** `layers` mode: how much prior work a player sees at turn start. */
+  /** How much prior work a player sees at turn start. */
   contextVisibility: ContextVisibility;
-  /** Number of visible octaves on the piano roll. */
-  octaves: number;
   /** Round countdown length in seconds. */
   roundDurationSec: number;
 }
@@ -165,10 +152,8 @@ export const DEFAULT_CONFIG: GameConfig = {
   root: 60, // C4
   scale: "major",
   stepsPerMeasure: 16,
-  measuresPerTurn: 4,
   barsPerSong: 4,
   contextVisibility: "previous",
-  octaves: 2,
   roundDurationSec: 180,
 };
 
@@ -187,12 +172,7 @@ export const MAX_BARS_PER_SONG = 8;
 export const PIANO_MIN = 36; // C2
 export const PIANO_MAX = 96; // C7
 
-/** Steps in a single `continue`-mode turn (measures appended per turn). */
-export function stepsPerTurn(config: GameConfig): number {
-  return config.stepsPerMeasure * config.measuresPerTurn;
-}
-
-/** Steps in one `layers`-mode loop (the shared bars every layer is written over). */
+/** Steps in one loop (the shared bars every layer is written over). */
 export function loopSteps(config: GameConfig): number {
   return config.stepsPerMeasure * config.barsPerSong;
 }

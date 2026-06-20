@@ -1,4 +1,4 @@
-import type { GameConfig, ScaleType } from "./types";
+import type { ScaleType } from "./types";
 
 /**
  * Semitone interval patterns for each supported scale, relative to the root.
@@ -33,50 +33,11 @@ export const NOTE_NAMES = [
   "B",
 ] as const;
 
-/**
- * Build the ascending list of in-scale MIDI pitches for a scale, spanning
- * `octaves` octaves starting at `root`. The primitive behind `buildScalePitches`
- * and the per-role pitch windows used in layers mode.
- */
-export function buildScaleWindow(scale: ScaleType, root: number, octaves: number): number[] {
-  const intervals = SCALE_INTERVALS[scale];
-  const pitches: number[] = [];
-  for (let octave = 0; octave <= octaves; octave++) {
-    for (const interval of intervals) {
-      pitches.push(root + octave * 12 + interval);
-    }
-  }
-  return pitches;
-}
-
-/**
- * Build the ascending list of in-scale MIDI pitches for a config, spanning
- * `octaves` octaves starting at `root`. The piano roll uses the reverse of this
- * list (high pitch on top) for its rows.
- */
-export function buildScalePitches(config: GameConfig): number[] {
-  return buildScaleWindow(config.scale, config.root, config.octaves);
-}
-
-/** True if a MIDI pitch belongs to the config's scale and visible range. */
-export function isInScale(pitch: number, config: GameConfig): boolean {
-  return buildScalePitches(config).includes(pitch);
-}
-
 /** Every chromatic MIDI pitch (ascending) in a window from `root` up `octaves`. */
 export function buildChromaticWindow(root: number, octaves: number): number[] {
   const pitches: number[] = [];
   for (let p = root; p <= root + octaves * 12; p++) pitches.push(p);
   return pitches;
-}
-
-/**
- * Every MIDI pitch (chromatic) in the visible window, ascending — from the root
- * up to `root + octaves*12`. The piano roll renders all of these as rows; the
- * in-scale ones are placeable, the rest are shown dimmed and locked.
- */
-export function buildChromaticRange(config: GameConfig): number[] {
-  return buildChromaticWindow(config.root, config.octaves);
 }
 
 /** True if a MIDI pitch is a black key (sharp/flat) on a piano. */

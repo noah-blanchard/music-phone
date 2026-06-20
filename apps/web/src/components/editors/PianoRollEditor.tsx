@@ -120,7 +120,7 @@ export function PianoRollEditor({
       return;
     }
 
-    const note: Note = { pitch: hit.pitch, start: hit.step, length: 1, timbre: "sine" };
+    const note: Note = { pitch: hit.pitch, start: hit.step, length: 1 };
     onChange([...draftRef.current, note]);
     setDrawing({ pitch: hit.pitch, start: hit.step });
     void ensureAudio().then(() => previewInstrument(instrumentId, hit.pitch));

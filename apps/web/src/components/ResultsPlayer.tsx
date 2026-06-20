@@ -3,10 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
 import { getRole, roleOfSegment, type GameConfig, type Melody } from "@musicphone/shared";
-import { ensureAudio, playLayers, playNotes, type PlayHandle } from "@/lib/audio/engine";
-import { flattenMelody, loopLength, melodySteps, stackLayers } from "@/lib/audio/schedule";
+import { ensureAudio, playLayers, type PlayHandle } from "@/lib/audio/engine";
+import { loopLength, stackLayers } from "@/lib/audio/schedule";
 import { uiClick } from "@/lib/audio/sfx";
-import { playerColor } from "@/lib/colors";
 import { useGameStore } from "@/store/game-store";
 
 interface Props {
@@ -17,8 +16,6 @@ interface Props {
 
 /** Final playback + JSON export of all finished songs. */
 export function ResultsPlayer({ melodies, config, roomCode }: Props) {
-  const isLayers = config.mode === "layers";
-
   const exportJson = () => {
     uiClick();
     const payload = { code: roomCode, config, melodies, exportedAt: new Date().toISOString() };
@@ -41,79 +38,20 @@ export function ResultsPlayer({ melodies, config, roomCode }: Props) {
       >
         <div className="results-head">
           <h1 className="logo" style={{ fontSize: 24, textAlign: "left" }}>
-            The <span className="accent">{isLayers ? "songs" : "melodies"}</span>
+            The <span className="accent">songs</span>
           </h1>
           <button className="hw-btn" onClick={exportJson}>
             ⤓ Export JSON
           </button>
         </div>
 
-        {isLayers ? (
-          <SequentialReveal melodies={melodies} config={config} />
-        ) : (
-          melodies.map((m, i) => <ContinueRow key={m.id} melody={m} index={i} config={config} />)
-        )}
+        <SequentialReveal melodies={melodies} config={config} />
       </motion.div>
     </div>
   );
 }
 
-/* --------------------------- continue mode row --------------------------- */
-
-function ContinueRow({ melody, index, config }: { melody: Melody; index: number; config: GameConfig }) {
-  const [playing, setPlaying] = useState(false);
-  const handleRef = useRef<PlayHandle | null>(null);
-
-  const stop = () => {
-    handleRef.current?.stop();
-    handleRef.current = null;
-    setPlaying(false);
-  };
-
-  const play = async () => {
-    await ensureAudio();
-    uiClick();
-    if (playing) return stop();
-    setPlaying(true);
-    handleRef.current = playNotes(flattenMelody(melody, config), config.bpm, melodySteps(melody, config), {
-      onEnd: stop,
-    });
-  };
-
-  useEffect(() => () => handleRef.current?.stop(), []);
-
-  return (
-    <motion.div
-      className="result-row"
-      initial={{ opacity: 0, x: -12 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ delay: 0.15 + index * 0.12, duration: 0.3 }}
-    >
-      <button
-        className="hw-btn hw-icon hw-btn--primary"
-        onClick={play}
-        disabled={melody.segments.every((s) => s.notes.length === 0)}
-      >
-        {playing ? "■" : "▶"}
-      </button>
-      <span className="result-title">Melody {index + 1}</span>
-      <div className="strip">
-        {melody.segments.map((seg, si) => (
-          <div
-            key={si}
-            className="strip-seg"
-            style={{ ["--sc" as string]: playerColor(seg.authorId) }}
-            title={`${seg.authorName} — ${seg.notes.length} notes`}
-          >
-            {seg.authorName}
-          </div>
-        ))}
-      </div>
-    </motion.div>
-  );
-}
-
-/* --------------------- layers mode: sequential reveal -------------------- */
+/* ----------------------------- sequential reveal ------------------------- */
 
 function SequentialReveal({ melodies, config }: { melodies: Melody[]; config: GameConfig }) {
   const reveal = useGameStore((s) => s.snapshot?.reveal);

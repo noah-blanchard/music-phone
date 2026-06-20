@@ -286,7 +286,7 @@ export class RoomManager {
     return {
       type: "round:started",
       round: room.round,
-      context: mode.buildContext(song, room.round, room.config),
+      contextLayers: mode.buildContext(song, room.round, room.config),
       role: mode.roleForRound(room.round, room.config),
       endsAt: room.roundEndsAt,
     };

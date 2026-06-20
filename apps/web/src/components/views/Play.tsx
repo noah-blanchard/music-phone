@@ -1,12 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { LAYER_ROLES, getRole, loopSteps, stepsPerTurn, type Layer, type Role } from "@musicphone/shared";
+import { LAYER_ROLES, getRole, loopSteps, type Layer, type Role } from "@musicphone/shared";
 import { useGameStore } from "@/store/game-store";
-import { PianoRoll } from "@/components/PianoRoll";
 import { PianoRollEditor } from "@/components/editors/PianoRollEditor";
 import { DrumGridEditor } from "@/components/editors/DrumGridEditor";
-import { NotePalette } from "@/components/NotePalette";
 import { TransportControls } from "@/components/TransportControls";
 import { RoundTimer } from "@/components/RoundTimer";
 import { RoundOverlay } from "@/components/RoundOverlay";
@@ -51,14 +49,9 @@ function SoundSelector({ role }: { role: Role }) {
   );
 }
 
-/**
- * Active turn. `layers` mode: add one role's layer over the shared loop, with
- * prior layers as read-only context. `continue` mode: extend the melody from the
- * previous player's last measure.
- */
+/** Active turn: add one role's layer over the shared loop, with prior layers as context. */
 export function Play() {
   const snapshot = useGameStore((s) => s.snapshot)!;
-  const contextNotes = useGameStore((s) => s.contextNotes);
   const contextLayers = useGameStore((s) => s.contextLayers);
   const currentRole = useGameStore((s) => s.currentRole);
   const selectedInstrument = useGameStore((s) => s.selectedInstrument);
@@ -66,23 +59,18 @@ export function Play() {
   const setPitchUnlocked = useGameStore((s) => s.setPitchUnlocked);
   const submitted = useGameStore((s) => s.submitted);
   const draft = useGameStore((s) => s.draft);
-  const selectedTimbre = useGameStore((s) => s.selectedTimbre);
   const setDraft = useGameStore((s) => s.setDraft);
   const clearDraft = useGameStore((s) => s.clearDraft);
-  const setTimbre = useGameStore((s) => s.setTimbre);
   const submitTurn = useGameStore((s) => s.submitTurn);
 
   const [playStep, setPlayStep] = useState<number | null>(null);
 
   const { config } = snapshot;
-  const isLayers = config.mode === "layers";
   const readyCount = snapshot.players.filter((p) => snapshot.ready[p.id]).length;
 
-  const role = isLayers ? (currentRole ?? getRole(LAYER_ROLES[snapshot.round]?.id) ?? LAYER_ROLES[0]!) : null;
-  const totalSteps = isLayers ? loopSteps(config) : stepsPerTurn(config);
-  const playLayersList: Layer[] = role
-    ? [...contextLayers, { roleId: role.id, instrumentId: selectedInstrument, notes: draft }]
-    : [];
+  const role: Role = currentRole ?? getRole(LAYER_ROLES[snapshot.round]?.id) ?? LAYER_ROLES[0]!;
+  const totalSteps = loopSteps(config);
+  const playLayersList: Layer[] = [...contextLayers, { roleId: role.id, instrumentId: selectedInstrument, notes: draft }];
 
   return (
     <div className="fill">
@@ -103,60 +91,33 @@ export function Play() {
 
       <main className="stage">
         <div className="stage-head">
-          {isLayers && role ? (
-            <>
-              <h2>
-                Add the <span style={{ color: role.color }}>{role.name}</span>
-              </h2>
-              <span className="muted" style={{ fontSize: 12 }}>
-                {CONTEXT_HINT[config.contextVisibility]} · {config.barsPerSong}-bar loop
-              </span>
-            </>
-          ) : (
-            <>
-              <h2>
-                {snapshot.round === 0 && contextNotes.length === 0
-                  ? "Start a fresh melody"
-                  : "Continue the melody"}
-              </h2>
-              <span className="muted" style={{ fontSize: 12 }}>
-                The cyan measure on the left is what you were handed — write the next{" "}
-                {config.measuresPerTurn}.
-              </span>
-            </>
-          )}
+          <h2>
+            Add the <span style={{ color: role.color }}>{role.name}</span>
+          </h2>
+          <span className="muted" style={{ fontSize: 12 }}>
+            {CONTEXT_HINT[config.contextVisibility]} · {config.barsPerSong}-bar loop
+          </span>
         </div>
 
         <div className="screen stage-screen">
-          {isLayers && role ? (
-            role.editor === "drum-grid" ? (
-              <DrumGridEditor
-                config={config}
-                role={role}
-                instrumentId={selectedInstrument}
-                draft={draft}
-                contextLayers={contextLayers}
-                onChange={setDraft}
-                playStep={playStep}
-              />
-            ) : (
-              <PianoRollEditor
-                config={config}
-                role={role}
-                instrumentId={selectedInstrument}
-                unlocked={pitchUnlocked}
-                draft={draft}
-                contextLayers={contextLayers}
-                onChange={setDraft}
-                playStep={playStep}
-              />
-            )
-          ) : (
-            <PianoRoll
+          {role.editor === "drum-grid" ? (
+            <DrumGridEditor
               config={config}
+              role={role}
+              instrumentId={selectedInstrument}
               draft={draft}
-              contextNotes={contextNotes}
-              selectedTimbre={selectedTimbre}
+              contextLayers={contextLayers}
+              onChange={setDraft}
+              playStep={playStep}
+            />
+          ) : (
+            <PianoRollEditor
+              config={config}
+              role={role}
+              instrumentId={selectedInstrument}
+              unlocked={pitchUnlocked}
+              draft={draft}
+              contextLayers={contextLayers}
               onChange={setDraft}
               playStep={playStep}
             />
@@ -165,17 +126,10 @@ export function Play() {
       </main>
 
       <footer className="dock">
-        {isLayers && role ? (
-          <div className="dock-group" style={{ flexDirection: "column", alignItems: "flex-start" }}>
-            <span className="dock-label">{role.editor === "drum-grid" ? "Kit" : "Sound"}</span>
-            <SoundSelector role={role} />
-          </div>
-        ) : (
-          <div className="dock-group" style={{ flexDirection: "column", alignItems: "flex-start" }}>
-            <span className="dock-label">Timbre</span>
-            <NotePalette selected={selectedTimbre} onSelect={setTimbre} />
-          </div>
-        )}
+        <div className="dock-group" style={{ flexDirection: "column", alignItems: "flex-start" }}>
+          <span className="dock-label">{role.editor === "drum-grid" ? "Kit" : "Sound"}</span>
+          <SoundSelector role={role} />
+        </div>
 
         <div className="dock-group" style={{ flexDirection: "column", alignItems: "flex-start" }}>
           <span className="dock-label">Transport</span>
@@ -183,8 +137,7 @@ export function Play() {
             <TransportControls
               config={config}
               totalSteps={totalSteps}
-              notes={isLayers ? undefined : draft}
-              layers={isLayers ? playLayersList : undefined}
+              layers={playLayersList}
               onStep={setPlayStep}
             />
             <button
@@ -196,7 +149,7 @@ export function Play() {
             >
               Clear
             </button>
-            {isLayers && role && role.editor === "piano-roll" && (
+            {role.editor === "piano-roll" && (
               <button
                 className={`hw-btn ${pitchUnlocked ? "hw-btn--danger" : "hw-btn--ghost"}`}
                 onClick={() => {
@@ -224,7 +177,7 @@ export function Play() {
               submitTurn();
             }}
           >
-            {submitted ? "✓ Submitted — update" : isLayers ? "Submit layer" : "Submit melody"}
+            {submitted ? "✓ Submitted — update" : "Submit layer"}
           </button>
         </div>
       </footer>

@@ -40,15 +40,6 @@ export interface Layer {
 }
 
 /**
- * Read-only context handed to a player when their turn starts. `continue` mode
- * sends the previous player's trailing measure; `layers` mode sends zero or more
- * prior layers depending on the host's `contextVisibility` setting.
- */
-export type RoundContext =
-  | { kind: "trailing-measure"; notes: Note[] }
-  | { kind: "layers"; layers: Layer[] };
-
-/**
  * The contract every game mode implements. `RoomManager` and the client are
  * mode-agnostic: they look the mode up in the registry and delegate. Everything
  * here is pure (no Tone.js, no sockets) so it lives in the shared package.
@@ -61,10 +52,10 @@ export interface GameMode {
   totalRounds(playerCount: number, config: GameConfig): number;
   /** Which song a player edits in a given round. */
   assign(playerIndex: number, round: number, n: number): number;
-  /** The role for a round (layers mode); null for modes without roles. */
-  roleForRound(round: number, config: GameConfig): Role | null;
-  /** Read-only context for the player editing `song` this round. */
-  buildContext(song: Melody, round: number, config: GameConfig): RoundContext;
+  /** The role for a round. */
+  roleForRound(round: number, config: GameConfig): Role;
+  /** Read-only prior layers for the player editing `song` this round. */
+  buildContext(song: Melody, round: number, config: GameConfig): Layer[];
   /** Number of editable steps in a turn for this mode. */
   turnSteps(config: GameConfig): number;
   /** Validate + normalize a submitted turn for the round's role/geometry. */

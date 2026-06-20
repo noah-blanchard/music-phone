@@ -1,5 +1,5 @@
 import type { GameConfig, Melody, Note, RoomSnapshot } from "./types";
-import type { Role, RoundContext } from "./modes/types";
+import type { Layer, Role } from "./modes/types";
 
 /**
  * WebSocket protocol. All realtime gameplay flows over these discriminated
@@ -76,13 +76,10 @@ export interface MsgSnapshot {
 export interface MsgRoundStarted {
   type: "round:started";
   round: number;
-  /**
-   * Read-only context for this turn (mode-specific): the previous trailing
-   * measure in `continue`, or 0..many prior layers in `layers`.
-   */
-  context: RoundContext;
-  /** The role to fill this round (layers mode); null when the mode has no roles. */
-  role: Role | null;
+  /** Read-only prior layers shown as context (0..many per the host setting). */
+  contextLayers: Layer[];
+  /** The role to fill this round. */
+  role: Role;
   /** Epoch milliseconds at which this round auto-advances. */
   endsAt: number;
 }
