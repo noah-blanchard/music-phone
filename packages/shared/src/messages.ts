@@ -23,11 +23,15 @@ export interface MsgConfigUpdate {
 export interface MsgAutosave {
   type: "turn:autosave";
   notes: Note[];
+  /** Chosen sound id for this layer (instrument or drum kit); optional. */
+  instrumentId?: string;
 }
 
 export interface MsgSubmit {
   type: "turn:submit";
   notes: Note[];
+  /** Chosen sound id for this layer (instrument or drum kit); optional. */
+  instrumentId?: string;
 }
 
 export interface MsgReady {
@@ -40,12 +44,13 @@ export interface MsgLeave {
 }
 
 /**
- * Results-phase reveal control. Only accepted from the song's seed player; the
- * server clamps and rebroadcasts so everyone follows the same guided reveal.
+ * Results-phase reveal control. Only accepted from the active song's seed player
+ * (its author). Setting `activeSong` to the next index advances the room-wide
+ * presentation to the next song; the server clamps and rebroadcasts.
  */
 export interface MsgReveal {
   type: "reveal:update";
-  songId: string;
+  activeSong: number;
   revealedLayers: number;
   playing: boolean;
 }

@@ -39,6 +39,7 @@ export function stackLayers(melody: Melody, limit?: number): Layer[] {
   const segments = limit == null ? melody.segments : melody.segments.slice(0, limit);
   return segments.map((seg) => ({
     roleId: roleOfSegment(seg.order, seg.roleId)?.id ?? seg.roleId ?? "",
+    instrumentId: seg.instrumentId,
     notes: seg.notes,
   }));
 }

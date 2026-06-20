@@ -48,12 +48,10 @@ export function ResultsPlayer({ melodies, config, roomCode }: Props) {
           </button>
         </div>
 
-        {melodies.map((melody, i) =>
-          isLayers ? (
-            <SongReveal key={melody.id} song={melody} index={i} config={config} />
-          ) : (
-            <ContinueRow key={melody.id} melody={melody} index={i} config={config} />
-          ),
+        {isLayers ? (
+          <SequentialReveal melodies={melodies} config={config} />
+        ) : (
+          melodies.map((m, i) => <ContinueRow key={m.id} melody={m} index={i} config={config} />)
         )}
       </motion.div>
     </div>
@@ -115,109 +113,162 @@ function ContinueRow({ melody, index, config }: { melody: Melody; index: number;
   );
 }
 
-/* ---------------------------- layers mode row ---------------------------- */
+/* --------------------- layers mode: sequential reveal -------------------- */
 
-function SongReveal({ song, index, config }: { song: Melody; index: number; config: GameConfig }) {
-  const reveal = useGameStore((s) => s.snapshot?.reveal?.[song.id]);
+function SequentialReveal({ melodies, config }: { melodies: Melody[]; config: GameConfig }) {
+  const reveal = useGameStore((s) => s.snapshot?.reveal);
   const selfId = useGameStore((s) => s.snapshot?.selfId);
   const setReveal = useGameStore((s) => s.setReveal);
 
+  const activeSong = reveal?.activeSong ?? 0;
   const revealed = reveal?.revealedLayers ?? 0;
   const playing = reveal?.playing ?? false;
-  const isController = selfId === song.seedPlayerId;
-  const total = song.segments.length;
+  const done = reveal?.done ?? false;
 
+  if (done) {
+    return (
+      <div className="reveal-done">
+        <p className="muted" style={{ fontSize: 12, marginBottom: 8 }}>
+          ✓ All songs revealed — replay any of them:
+        </p>
+        {melodies.map((m, i) => (
+          <FreeSong key={m.id} song={m} index={i} config={config} />
+        ))}
+      </div>
+    );
+  }
+
+  const song = melodies[activeSong]!;
+
+  return (
+    <div className="reveal">
+      <div className="reveal-list">
+        {melodies.map((m, i) => {
+          const status = i < activeSong ? "done" : i === activeSong ? "current" : "upcoming";
+          return (
+            <span key={m.id} className={`reveal-pill ${status}`}>
+              {status === "done" ? "✓" : status === "current" ? "●" : "○"} Song {i + 1}
+            </span>
+          );
+        })}
+      </div>
+
+      <ActiveSong
+        key={song.id}
+        song={song}
+        index={activeSong}
+        last={activeSong === melodies.length - 1}
+        config={config}
+        selfId={selfId}
+        revealed={revealed}
+        playing={playing}
+        setReveal={setReveal}
+      />
+    </div>
+  );
+}
+
+function ActiveSong({
+  song,
+  index,
+  last,
+  config,
+  selfId,
+  revealed,
+  playing,
+  setReveal,
+}: {
+  song: Melody;
+  index: number;
+  last: boolean;
+  config: GameConfig;
+  selfId: string | undefined;
+  revealed: number;
+  playing: boolean;
+  setReveal: (activeSong: number, revealedLayers: number, playing: boolean) => void;
+}) {
+  const isPresenter = selfId === song.seedPlayerId;
+  const total = song.segments.length;
   const [muted, setMuted] = useState<Set<number>>(new Set());
   const [step, setStep] = useState<number | null>(null);
   const handleRef = useRef<PlayHandle | null>(null);
 
-  // Drive local audio from the synced reveal state (+ local mutes). The loop is
-  // rebuilt whenever the revealed set, play state, or mutes change.
+  // Local audio follows the synced reveal state (+ local mutes).
   useEffect(() => {
     handleRef.current?.stop();
     handleRef.current = null;
     setStep(null);
     if (!playing || revealed <= 0) return;
-
     let cancelled = false;
     void (async () => {
       await ensureAudio();
       if (cancelled) return;
       const layers = stackLayers(song, revealed).filter((_, i) => !muted.has(i));
-      handleRef.current = playLayers(layers, config.bpm, loopLength(config), {
-        loop: true,
-        onStep: setStep,
-      });
+      handleRef.current = playLayers(layers, config.bpm, loopLength(config), { loop: true, onStep: setStep });
     })();
-
     return () => {
       cancelled = true;
       handleRef.current?.stop();
       handleRef.current = null;
     };
-    // Depend on primitives (not the song/config objects, which get fresh refs on
-    // every snapshot) so an unrelated reveal toggle doesn't restart this song.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playing, revealed, muted, song.id, config.bpm, config.barsPerSong, config.stepsPerMeasure]);
 
   useEffect(() => () => handleRef.current?.stop(), []);
 
-  const toggleMute = (i: number) => {
+  const toggleMute = (i: number) =>
     setMuted((prev) => {
       const next = new Set(prev);
-      if (next.has(i)) next.delete(i);
-      else next.add(i);
+      next.has(i) ? next.delete(i) : next.add(i);
       return next;
     });
-  };
-
-  const playPause = () => {
-    uiClick();
-    if (playing) setReveal(song.id, revealed, false);
-    else setReveal(song.id, Math.max(revealed, 1), true);
-  };
-  const revealNext = () => {
-    uiClick();
-    setReveal(song.id, Math.min(revealed + 1, total), true);
-  };
-  const reset = () => {
-    uiClick();
-    setReveal(song.id, 0, false);
-  };
 
   return (
     <motion.div
       className="result-row song-reveal"
-      initial={{ opacity: 0, x: -12 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ delay: 0.15 + index * 0.12, duration: 0.3 }}
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
     >
       <div className="row" style={{ gap: 8, alignItems: "center" }}>
-        {isController ? (
-          <>
-            <button className="hw-btn hw-icon hw-btn--primary" onClick={playPause} title="Play / pause">
-              {playing ? "■" : "▶"}
-            </button>
-            <button className="hw-btn" onClick={revealNext} disabled={revealed >= total}>
-              Reveal next
-            </button>
-            <button className="hw-btn hw-btn--ghost" onClick={reset} disabled={revealed === 0}>
-              Reset
-            </button>
-          </>
-        ) : (
-          <span className="chip">{playing ? "● live" : "○ paused"}</span>
-        )}
-        <span className="result-title">
+        <span className="result-title" style={{ width: "auto" }}>
           Song {index + 1}
-          {isController && <span className="muted" style={{ fontSize: 11 }}> (you host the reveal)</span>}
         </span>
         <span className="led led-dim" style={{ fontSize: 11 }}>
           {revealed}/{total} layers{step != null ? ` · ${step + 1}` : ""}
         </span>
+        {isPresenter ? (
+          <span className="chip" style={{ marginLeft: "auto" }}>
+            you present
+          </span>
+        ) : (
+          <span className="chip" style={{ marginLeft: "auto" }}>
+            {playing ? "● live" : "○ paused"}
+          </span>
+        )}
       </div>
 
-      <div className="strip" style={{ marginTop: 8 }}>
+      {isPresenter && (
+        <div className="row" style={{ gap: 8, marginTop: 8 }}>
+          <button
+            className="hw-btn hw-icon hw-btn--primary"
+            onClick={() => {
+              uiClick();
+              playing ? setReveal(index, revealed, false) : setReveal(index, Math.max(revealed, 1), true);
+            }}
+          >
+            {playing ? "■" : "▶"}
+          </button>
+          <button className="hw-btn" onClick={() => { uiClick(); setReveal(index, Math.min(revealed + 1, total), true); }} disabled={revealed >= total}>
+            Reveal next layer
+          </button>
+          <button className="hw-btn hw-btn--ghost" onClick={() => { uiClick(); setReveal(index + 1, 0, false); }}>
+            {last ? "Finish ▸" : "Next song ▸"}
+          </button>
+        </div>
+      )}
+
+      <div className="strip" style={{ marginTop: 10 }}>
         {song.segments.map((seg, si) => {
           const role = roleOfSegment(seg.order, seg.roleId) ?? getRole(seg.roleId);
           const shown = si < revealed;
@@ -238,5 +289,49 @@ function SongReveal({ song, index, config }: { song: Melody; index: number; conf
         })}
       </div>
     </motion.div>
+  );
+}
+
+/** Free local replay of a finished song (shown after the reveal is done). */
+function FreeSong({ song, index, config }: { song: Melody; index: number; config: GameConfig }) {
+  const [playing, setPlaying] = useState(false);
+  const handleRef = useRef<PlayHandle | null>(null);
+
+  const stop = () => {
+    handleRef.current?.stop();
+    handleRef.current = null;
+    setPlaying(false);
+  };
+  const play = async () => {
+    await ensureAudio();
+    uiClick();
+    if (playing) return stop();
+    setPlaying(true);
+    handleRef.current = playLayers(stackLayers(song), config.bpm, loopLength(config), { loop: true });
+  };
+  useEffect(() => () => handleRef.current?.stop(), []);
+
+  return (
+    <div className="result-row">
+      <button className="hw-btn hw-icon hw-btn--primary" onClick={play}>
+        {playing ? "■" : "▶"}
+      </button>
+      <span className="result-title">Song {index + 1}</span>
+      <div className="strip">
+        {song.segments.map((seg, si) => {
+          const role = roleOfSegment(seg.order, seg.roleId) ?? getRole(seg.roleId);
+          return (
+            <div
+              key={si}
+              className="strip-seg"
+              style={{ ["--sc" as string]: role?.color ?? "#888" }}
+              title={`${role?.name ?? "Layer"} — ${seg.authorName}`}
+            >
+              {role?.name ?? "Layer"} · {seg.authorName}
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }

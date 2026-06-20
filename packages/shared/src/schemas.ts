@@ -22,6 +22,11 @@ function isFiniteInt(v: unknown): v is number {
   return typeof v === "number" && Number.isFinite(v) && Number.isInteger(v);
 }
 
+/** Accept a short sound-id string (instrument or kit), else undefined. */
+function cleanInstrumentId(v: unknown): string | undefined {
+  return typeof v === "string" && v.length > 0 && v.length <= 40 ? v : undefined;
+}
+
 /** Validate and normalize a single note against the active config. */
 export function validateNote(v: unknown, config: GameConfig): Note | null {
   if (!isObject(v)) return null;
@@ -67,16 +72,20 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
         ? { type: "config:update", config: raw.config as Partial<GameConfig> }
         : null;
     case "turn:autosave":
-      return Array.isArray(raw.notes) ? { type: "turn:autosave", notes: raw.notes as Note[] } : null;
+      return Array.isArray(raw.notes)
+        ? { type: "turn:autosave", notes: raw.notes as Note[], instrumentId: cleanInstrumentId(raw.instrumentId) }
+        : null;
     case "turn:submit":
-      return Array.isArray(raw.notes) ? { type: "turn:submit", notes: raw.notes as Note[] } : null;
+      return Array.isArray(raw.notes)
+        ? { type: "turn:submit", notes: raw.notes as Note[], instrumentId: cleanInstrumentId(raw.instrumentId) }
+        : null;
     case "reveal:update":
-      return typeof raw.songId === "string" &&
+      return isFiniteInt(raw.activeSong) &&
         isFiniteInt(raw.revealedLayers) &&
         typeof raw.playing === "boolean"
         ? {
             type: "reveal:update",
-            songId: raw.songId,
+            activeSong: raw.activeSong,
             revealedLayers: raw.revealedLayers,
             playing: raw.playing,
           }

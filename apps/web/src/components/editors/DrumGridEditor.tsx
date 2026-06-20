@@ -10,6 +10,8 @@ const KEYS_W = 56;
 interface Props {
   config: GameConfig;
   role: Role;
+  /** Selected drum kit id, used for placement preview. */
+  instrumentId: string;
   draft: Note[];
   contextLayers: Layer[];
   onChange: (notes: Note[]) => void;
@@ -21,7 +23,7 @@ interface Props {
  * pitch), columns are the loop steps. Click a cell to toggle a hit. Prior drum
  * layers are shown faintly behind the grid; everything is audible on Play.
  */
-export function DrumGridEditor({ config, role, draft, contextLayers, onChange, playStep }: Props) {
+export function DrumGridEditor({ config, role, instrumentId, draft, contextLayers, onChange, playStep }: Props) {
   const lanes = DRUM_LANES;
   const editSteps = loopSteps(config);
   const rows = lanes.length;
@@ -58,9 +60,9 @@ export function DrumGridEditor({ config, role, draft, contextLayers, onChange, p
         return;
       }
       onChange([...draftRef.current, { pitch: lane, start: step, length: 1, timbre: "sine" }]);
-      void ensureAudio().then(() => previewDrum(lane));
+      void ensureAudio().then(() => previewDrum(instrumentId, lane));
     },
-    [cellW, rowH, rows, editSteps, onChange],
+    [cellW, rowH, rows, editSteps, onChange, instrumentId],
   );
 
   const drumContext = useMemo(

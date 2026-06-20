@@ -22,6 +22,8 @@ interface RoomRuntime {
   pending: Map<string, Note[]>;
   /** Latest autosaved draft per player (fallback when a round times out). */
   drafts: Map<string, Note[]>;
+  /** Latest chosen sound id (instrument/kit) per player for the current round. */
+  instruments: Map<string, string>;
   timer: ReturnType<typeof setTimeout> | null;
   /** Cleanup timer started when a room becomes empty. */
   reaper: ReturnType<typeof setTimeout> | null;
@@ -80,13 +82,14 @@ export class RoomManager {
       melodies: [],
       roundEndsAt: 0,
       ready: {},
-      reveal: {},
+      reveal: { activeSong: 0, revealedLayers: 0, playing: false, done: false },
     };
     this.rooms.set(code, room);
     this.runtimes.set(code, {
       sockets: new Map(),
       pending: new Map(),
       drafts: new Map(),
+      instruments: new Map(),
       timer: null,
       reaper: null,
       leaveTimers: new Map(),
@@ -305,6 +308,7 @@ export class RoomManager {
     room.ready = {};
     rt.pending.clear();
     rt.drafts.clear();
+    rt.instruments.clear();
     room.roundEndsAt = Date.now() + room.config.roundDurationSec * 1000;
 
     if (rt.timer) clearTimeout(rt.timer);
@@ -318,21 +322,23 @@ export class RoomManager {
     }
   }
 
-  autosave(code: string, playerId: string, notes: unknown): void {
+  autosave(code: string, playerId: string, notes: unknown, instrumentId?: string): void {
     const room = this.rooms.get(code);
     const rt = this.runtimes.get(code);
     if (!room || !rt || room.phase !== "playing") return;
     const clean = getMode(room.config.mode).validateTurn(notes, room.round, room.config);
     rt.drafts.set(playerId, clean);
+    if (instrumentId) rt.instruments.set(playerId, instrumentId);
   }
 
-  submit(code: string, playerId: string, notes: unknown): void {
+  submit(code: string, playerId: string, notes: unknown, instrumentId?: string): void {
     const room = this.rooms.get(code);
     const rt = this.runtimes.get(code);
     if (!room || !rt || room.phase !== "playing") return;
     const clean = getMode(room.config.mode).validateTurn(notes, room.round, room.config);
     rt.pending.set(playerId, clean);
     rt.drafts.set(playerId, clean);
+    if (instrumentId) rt.instruments.set(playerId, instrumentId);
     room.ready[playerId] = true;
     this.broadcastSnapshot(code);
     this.maybeAdvance(code);
@@ -377,6 +383,7 @@ export class RoomManager {
         authorName: player.name,
         order: room.round,
         roleId: role?.id,
+        instrumentId: rt.instruments.get(player.id),
         notes,
       });
     });
@@ -386,11 +393,8 @@ export class RoomManager {
 
     if (room.round >= room.totalRounds) {
       room.phase = "results";
-      // Seed the synced reveal: nothing revealed yet, controllers step it up.
-      room.reveal = {};
-      for (const melody of room.melodies) {
-        room.reveal[melody.id] = { revealedLayers: 0, playing: false };
-      }
+      // Start the room-wide guided reveal at the first song, nothing revealed.
+      room.reveal = { activeSong: 0, revealedLayers: 0, playing: false, done: false };
       this.broadcast(code, { type: "game:finished", melodies: room.melodies });
       this.broadcastSnapshot(code);
     } else {
@@ -399,22 +403,44 @@ export class RoomManager {
   }
 
   /**
-   * Update a song's guided-reveal state. Only the song's seed player (its first
-   * layer's author) may drive it; the new state is clamped and rebroadcast.
+   * Drive the single, room-wide guided reveal. Only the active song's seed player
+   * (its author) may control it. Setting `activeSong` to the next index advances
+   * to the next song (resetting its reveal) and hands control to that song's
+   * author; advancing past the last song marks the reveal `done`.
    */
   setReveal(
     code: string,
     playerId: string,
-    songId: string,
+    activeSong: number,
     revealedLayers: number,
     playing: boolean,
   ): void {
     const room = this.rooms.get(code);
-    if (!room || room.phase !== "results") return;
-    const song = room.melodies.find((m) => m.id === songId);
-    if (!song || song.seedPlayerId !== playerId) return;
-    const clamped = Math.min(Math.max(0, Math.floor(revealedLayers)), song.segments.length);
-    room.reveal[songId] = { revealedLayers: clamped, playing };
+    if (!room || room.phase !== "results" || room.reveal.done) return;
+
+    const current = room.reveal.activeSong;
+    const presenter = room.melodies[current]?.seedPlayerId;
+    if (presenter !== playerId) return; // only the current song's author controls
+
+    if (activeSong === current) {
+      // Update the current song's reveal in place.
+      const max = room.melodies[current]?.segments.length ?? 0;
+      room.reveal = {
+        activeSong: current,
+        revealedLayers: Math.min(Math.max(0, Math.floor(revealedLayers)), max),
+        playing,
+        done: false,
+      };
+    } else if (activeSong === current + 1) {
+      // Advance to the next song (or finish after the last).
+      const next = current + 1;
+      room.reveal =
+        next >= room.melodies.length
+          ? { activeSong: current, revealedLayers: 0, playing: false, done: true }
+          : { activeSong: next, revealedLayers: 0, playing: false, done: false };
+    } else {
+      return; // out-of-order request, ignore
+    }
     this.broadcastSnapshot(code);
   }
 }

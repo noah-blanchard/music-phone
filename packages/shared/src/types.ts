@@ -52,6 +52,11 @@ export interface Segment {
   order: number;
   /** The role this layer fills (layers mode). Absent in `continue`. */
   roleId?: string;
+  /**
+   * The sound the author chose for this layer: an instrument id for pitched
+   * roles, a kit id for drum roles. Falls back to the role default if absent.
+   */
+  instrumentId?: string;
   notes: Note[];
 }
 
@@ -110,18 +115,22 @@ export interface Room {
   /** Per-player ready flag for the current round, keyed by playerId. */
   ready: Record<string, boolean>;
   /**
-   * Results-only: the synced "guided reveal" state per song, keyed by melody id.
-   * Driven by each song's seed player so everyone follows the same reveal.
+   * Results-only: the single, room-wide "guided reveal" cursor. One song is
+   * presented at a time, driven by that song's seed player (its author).
    */
-  reveal: Record<string, RevealState>;
+  reveal: RevealState;
 }
 
-/** Synced reveal state for one finished song (results phase). */
+/** Room-wide guided-reveal cursor (results phase). */
 export interface RevealState {
-  /** Number of layers currently revealed (audible/visible to everyone). */
+  /** Index into `melodies` of the song currently being presented. */
+  activeSong: number;
+  /** Layers of the active song currently revealed (audible/visible to everyone). */
   revealedLayers: number;
-  /** Whether the controller has the loop running. */
+  /** Whether the active song's loop is running. */
   playing: boolean;
+  /** True once every song has been presented. */
+  done: boolean;
 }
 
 /**
@@ -145,8 +154,8 @@ export interface RoomSnapshot {
    * Empty during lobby/playing.
    */
   melodies: Melody[];
-  /** Synced reveal state per song id (results phase only). */
-  reveal: Record<string, RevealState>;
+  /** Room-wide guided-reveal cursor (results phase only). */
+  reveal: RevealState;
 }
 
 /** Default game configuration applied when a host creates a room. */
@@ -168,6 +177,15 @@ export const MAX_PLAYERS = 8;
 
 export const MIN_BARS_PER_SONG = 2;
 export const MAX_BARS_PER_SONG = 8;
+
+/**
+ * Full pitch range the layers piano roll renders (C2..C7). Wide and scrollable;
+ * roles only set the *default scroll focus*, not placement bounds. Server-side
+ * pitched validation accepts any pitch in this range (the scale-lock is a
+ * client-side editing aid with a per-player toggle).
+ */
+export const PIANO_MIN = 36; // C2
+export const PIANO_MAX = 96; // C7
 
 /** Steps in a single `continue`-mode turn (measures appended per turn). */
 export function stepsPerTurn(config: GameConfig): number {

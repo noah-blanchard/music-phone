@@ -1,7 +1,14 @@
 import * as Tone from "tone";
-import { getRole, midiToToneNote, type Layer, type Note, type Timbre } from "@musicphone/shared";
+import {
+  getRole,
+  midiToToneNote,
+  roleDefaultSound,
+  type Layer,
+  type Note,
+  type Timbre,
+} from "@musicphone/shared";
 import { getInstrument } from "./instruments";
-import { getDrumKit } from "./drums";
+import { getDrumKitVoices } from "./drums";
 
 /**
  * Thin wrapper around Tone.js. Holds one PolySynth per timbre so a single turn
@@ -51,10 +58,10 @@ export function previewInstrument(instrumentId: string, pitch: number): void {
   getInstrument(instrumentId).triggerAttackRelease(midiToToneNote(pitch), 0.2, Tone.now());
 }
 
-/** Audition a drum lane immediately (drum-grid placement). */
-export function previewDrum(lane: number): void {
+/** Audition a drum lane immediately through a kit (drum-grid placement). */
+export function previewDrum(kitId: string, lane: number): void {
   if (!started) return;
-  getDrumKit()[lane]?.trigger(Tone.now());
+  getDrumKitVoices(kitId)[lane]?.trigger(Tone.now());
 }
 
 /** Seconds per 16th-note step at a given tempo (4 sixteenths per beat). */
@@ -146,11 +153,13 @@ export function playLayers(
     const role = getRole(layer.roleId);
     if (!role || layer.notes.length === 0) continue;
     const isDrums = role.editor === "drum-grid";
-    const instrument = isDrums ? null : getInstrument(role.instrumentId);
+    const soundId = layer.instrumentId ?? roleDefaultSound(role);
+    const drumVoices = isDrums ? getDrumKitVoices(soundId) : null;
+    const instrument = isDrums ? null : getInstrument(soundId);
     const part = new Tone.Part(
       (time, ev: Note) => {
         if (isDrums) {
-          getDrumKit()[ev.pitch]?.trigger(time);
+          drumVoices![ev.pitch]?.trigger(time);
         } else {
           instrument!.triggerAttackRelease(
             midiToToneNote(ev.pitch),

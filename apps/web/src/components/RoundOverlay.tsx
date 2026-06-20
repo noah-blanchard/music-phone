@@ -14,6 +14,7 @@ type Stage = "splash" | 3 | 2 | 1 | 0 | null;
 export function RoundOverlay() {
   const roundCue = useGameStore((s) => s.roundCue);
   const snapshot = useGameStore((s) => s.snapshot);
+  const currentRole = useGameStore((s) => s.currentRole);
   const reduce = useReducedMotion();
   const [stage, setStage] = useState<Stage>(null);
 
@@ -70,7 +71,13 @@ export function RoundOverlay() {
               <div className="overlay-round">
                 ROUND {round} / {total}
               </div>
-              <div className="overlay-sub">♪ a melody arrives ♪</div>
+              {currentRole ? (
+                <div className="overlay-sub" style={{ color: currentRole.color }}>
+                  ▣ Your part: {currentRole.name}
+                </div>
+              ) : (
+                <div className="overlay-sub">♪ a melody arrives ♪</div>
+              )}
             </motion.div>
           ) : (
             <motion.div

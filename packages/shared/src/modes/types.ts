@@ -12,19 +12,30 @@ export interface Role {
   color: string;
   /** Which editor a player uses for this role. */
   editor: "piano-roll" | "drum-grid";
-  /** Sound id resolved by the web instrument registry (piano-roll roles). */
-  instrumentId: string;
-  /** Pitch window for piano-roll roles, as an octave offset from `config.root`. */
+  /**
+   * Candidate sound ids the player may pick from (`[0]` is the default). For
+   * pitched roles these are instrument ids; for drum roles they are kit ids.
+   * Resolved by the web sound registry.
+   */
+  instruments: string[];
+  /** Default scroll-focus octave offset from `config.root` (piano-roll roles). */
   octaveOffset: number;
-  /** Height of the pitch window in octaves (piano-roll roles). */
+  /** Suggested focus height in octaves (piano-roll roles). */
   octaves: number;
-  /** Pitched roles are scale-locked; drum roles are not. */
+  /** Pitched roles default to scale-lock (toggleable); drum roles are not. */
   scaleLocked: boolean;
+}
+
+/** The default sound id for a role (the first candidate). */
+export function roleDefaultSound(role: Role): string {
+  return role.instruments[0] ?? "";
 }
 
 /** One stacked contribution over the shared bars (layers mode playback unit). */
 export interface Layer {
   roleId: string;
+  /** Chosen sound id (instrument or kit); falls back to the role default. */
+  instrumentId?: string;
   notes: Note[];
 }
 

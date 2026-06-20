@@ -10,6 +10,7 @@ import type {
   ServerMessage,
   Timbre,
 } from "@musicphone/shared";
+import { roleDefaultSound } from "@musicphone/shared";
 import { wsUrl } from "@/lib/eden";
 
 /**
@@ -25,6 +26,12 @@ interface GameState {
   contextLayers: Layer[];
   /** The role to fill this round (layers mode); null otherwise. */
   currentRole: Role | null;
+  /** Chosen sound id (instrument or kit) for the current layer. */
+  selectedInstrument: string;
+  /** Whether the local player unlocked out-of-scale placement this round. */
+  pitchUnlocked: boolean;
+  /** Whether the local player has submitted the current round. */
+  submitted: boolean;
   /** Finished melodies, populated on game:finished. */
   finishedMelodies: Melody[];
   /** Local, editable notes for the current turn. */
@@ -41,13 +48,15 @@ interface GameState {
   setDraft: (notes: Note[]) => void;
   clearDraft: () => void;
   setTimbre: (timbre: Timbre) => void;
+  setInstrument: (instrumentId: string) => void;
+  setPitchUnlocked: (unlocked: boolean) => void;
 
   startGame: () => void;
   updateConfig: (patch: Partial<GameConfig>) => void;
   setReady: (ready: boolean) => void;
   submitTurn: () => void;
-  /** Drive the synced results reveal for a song (seed player only). */
-  setReveal: (songId: string, revealedLayers: number, playing: boolean) => void;
+  /** Drive the room-wide guided reveal (active song's author only). */
+  setReveal: (activeSong: number, revealedLayers: number, playing: boolean) => void;
 }
 
 let socket: WebSocket | null = null;
@@ -64,6 +73,9 @@ export const useGameStore = create<GameState>((set, get) => ({
   contextNotes: [],
   contextLayers: [],
   currentRole: null,
+  selectedInstrument: "",
+  pitchUnlocked: false,
+  submitted: false,
   finishedMelodies: [],
   draft: [],
   selectedTimbre: "sine",
@@ -131,25 +143,35 @@ export const useGameStore = create<GameState>((set, get) => ({
   setDraft: (notes) => {
     set({ draft: notes });
     if (autosaveTimer) clearTimeout(autosaveTimer);
-    autosaveTimer = setTimeout(() => send({ type: "turn:autosave", notes: get().draft }), 600);
+    autosaveTimer = setTimeout(
+      () => send({ type: "turn:autosave", notes: get().draft, instrumentId: get().selectedInstrument }),
+      600,
+    );
   },
 
   clearDraft: () => {
     set({ draft: [] });
-    send({ type: "turn:autosave", notes: [] });
+    send({ type: "turn:autosave", notes: [], instrumentId: get().selectedInstrument });
   },
 
   setTimbre: (timbre) => set({ selectedTimbre: timbre }),
+  setInstrument: (instrumentId) => {
+    set({ selectedInstrument: instrumentId });
+    // Persist the choice even if the draft isn't edited again before submit.
+    send({ type: "turn:autosave", notes: get().draft, instrumentId });
+  },
+  setPitchUnlocked: (pitchUnlocked) => set({ pitchUnlocked }),
 
   startGame: () => send({ type: "game:start" }),
   updateConfig: (config) => send({ type: "config:update", config }),
   setReady: (ready) => send({ type: "player:ready", ready }),
   submitTurn: () => {
-    send({ type: "turn:submit", notes: get().draft });
+    send({ type: "turn:submit", notes: get().draft, instrumentId: get().selectedInstrument });
     send({ type: "player:ready", ready: true });
+    set({ submitted: true });
   },
-  setReveal: (songId, revealedLayers, playing) =>
-    send({ type: "reveal:update", songId, revealedLayers, playing }),
+  setReveal: (activeSong, revealedLayers, playing) =>
+    send({ type: "reveal:update", activeSong, revealedLayers, playing }),
 }));
 
 function dispatch(
@@ -163,12 +185,15 @@ function dispatch(
       if (msg.room.phase === "results") set({ finishedMelodies: msg.room.melodies });
       break;
     case "round:started":
-      // A new turn begins: load the read-only context, clear local work, and
-      // bump the cue so the countdown overlay fires.
+      // A new turn begins: load the read-only context, clear local work, reset
+      // per-round UI state, and bump the cue so the countdown overlay fires.
       set((s) => ({
         contextNotes: msg.context.kind === "trailing-measure" ? msg.context.notes : [],
         contextLayers: msg.context.kind === "layers" ? msg.context.layers : [],
         currentRole: msg.role,
+        selectedInstrument: msg.role ? roleDefaultSound(msg.role) : "",
+        pitchUnlocked: false,
+        submitted: false,
         draft: [],
         roundCue: s.roundCue + 1,
       }));

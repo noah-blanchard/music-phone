@@ -34,16 +34,16 @@ export function handleClientMessage(
       manager.updateConfig(code, playerId, msg.config);
       break;
     case "turn:autosave":
-      manager.autosave(code, playerId, msg.notes);
+      manager.autosave(code, playerId, msg.notes, msg.instrumentId);
       break;
     case "turn:submit":
-      manager.submit(code, playerId, msg.notes);
+      manager.submit(code, playerId, msg.notes, msg.instrumentId);
       break;
     case "player:ready":
       manager.setReady(code, playerId, msg.ready);
       break;
     case "reveal:update":
-      manager.setReveal(code, playerId, msg.songId, msg.revealedLayers, msg.playing);
+      manager.setReveal(code, playerId, msg.activeSong, msg.revealedLayers, msg.playing);
       break;
     case "room:leave":
       manager.leave(code, playerId);

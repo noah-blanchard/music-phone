@@ -9,6 +9,16 @@
   min-height: 0; /* allow it to shrink inside the flex column */
 }
 
+/* Vertical scroll container for the full-range layers roll (keys + grid scroll
+   together). */
+.pr-scroll {
+  flex: 1 1 auto;
+  display: flex;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
 /* Vintage piano keyboard gutter */
 .pr-keys {
   flex: 0 0 auto;
@@ -42,6 +52,17 @@
   color: #1a1206;
   box-shadow: 0 0 14px var(--amber-glow);
 }
+/* Out-of-scale, scale-lock ON: unmistakably dead/blacked-out key. */
+.pr-key.locked {
+  background: repeating-linear-gradient(
+    -45deg,
+    #050506,
+    #050506 5px,
+    #0c0c0e 5px,
+    #0c0c0e 10px
+  );
+  color: transparent;
+}
 
 /* Grid surface */
 .pr-grid {
@@ -55,10 +76,22 @@
   left: 0;
 }
 .pr-row.locked {
-  background: rgba(0, 0, 0, 0.5);
+  /* Solid blacked-out lane so the scale-lock is obvious at a glance. */
+  background: repeating-linear-gradient(
+    -45deg,
+    rgba(0, 0, 0, 0.92),
+    rgba(0, 0, 0, 0.92) 6px,
+    rgba(12, 12, 14, 0.92) 6px,
+    rgba(12, 12, 14, 0.92) 12px
+  );
+  cursor: not-allowed;
 }
 .pr-row.in-scale.alt {
   background: rgba(255, 255, 255, 0.022);
+}
+/* Unlocked (chromatic) out-of-scale rows: faint warning tint, still placeable. */
+.pr-row.in-scale.offscale {
+  background: rgba(255, 90, 90, 0.05);
 }
 .pr-row.root {
   background: rgba(255, 158, 44, 0.06);

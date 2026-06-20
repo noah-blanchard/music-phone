@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { LAYER_ROLES, getRole, loopSteps, stepsPerTurn, type Layer } from "@musicphone/shared";
+import { LAYER_ROLES, getRole, loopSteps, stepsPerTurn, type Layer, type Role } from "@musicphone/shared";
 import { useGameStore } from "@/store/game-store";
 import { PianoRoll } from "@/components/PianoRoll";
 import { PianoRollEditor } from "@/components/editors/PianoRollEditor";
@@ -10,6 +10,9 @@ import { NotePalette } from "@/components/NotePalette";
 import { TransportControls } from "@/components/TransportControls";
 import { RoundTimer } from "@/components/RoundTimer";
 import { RoundOverlay } from "@/components/RoundOverlay";
+import { ensureAudio, previewDrum, previewInstrument } from "@/lib/audio/engine";
+import { getInstrumentLabel } from "@/lib/audio/instruments";
+import { getDrumKitLabel } from "@/lib/audio/drums";
 import { uiClick, uiConfirm } from "@/lib/audio/sfx";
 
 const CONTEXT_HINT: Record<string, string> = {
@@ -17,6 +20,36 @@ const CONTEXT_HINT: Record<string, string> = {
   all: "You can see & hear everything built so far.",
   blind: "You're going in blind — no preview of the other layers.",
 };
+
+/** Sound (instrument / drum-kit) picker for the active role. */
+function SoundSelector({ role }: { role: Role }) {
+  const selected = useGameStore((s) => s.selectedInstrument);
+  const setInstrument = useGameStore((s) => s.setInstrument);
+  const isDrums = role.editor === "drum-grid";
+  const label = (id: string) => (isDrums ? getDrumKitLabel(id) : getInstrumentLabel(id));
+
+  return (
+    <div className="sound-keys">
+      {role.instruments.map((id) => (
+        <button
+          key={id}
+          type="button"
+          className={`sound-key${selected === id ? " selected" : ""}`}
+          style={{ ["--tc" as string]: role.color }}
+          onClick={() => {
+            uiClick();
+            setInstrument(id);
+            void ensureAudio().then(() =>
+              isDrums ? previewDrum(id, 0) : previewInstrument(id, role.octaveOffset * 12 + 67),
+            );
+          }}
+        >
+          {label(id)}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 /**
  * Active turn. `layers` mode: add one role's layer over the shared loop, with
@@ -28,6 +61,10 @@ export function Play() {
   const contextNotes = useGameStore((s) => s.contextNotes);
   const contextLayers = useGameStore((s) => s.contextLayers);
   const currentRole = useGameStore((s) => s.currentRole);
+  const selectedInstrument = useGameStore((s) => s.selectedInstrument);
+  const pitchUnlocked = useGameStore((s) => s.pitchUnlocked);
+  const setPitchUnlocked = useGameStore((s) => s.setPitchUnlocked);
+  const submitted = useGameStore((s) => s.submitted);
   const draft = useGameStore((s) => s.draft);
   const selectedTimbre = useGameStore((s) => s.selectedTimbre);
   const setDraft = useGameStore((s) => s.setDraft);
@@ -39,15 +76,12 @@ export function Play() {
 
   const { config } = snapshot;
   const isLayers = config.mode === "layers";
-  const submitted = !!snapshot.ready[snapshot.selfId];
   const readyCount = snapshot.players.filter((p) => snapshot.ready[p.id]).length;
 
-  // Layers mode resolves the role for this round (store value, with a fallback
-  // for the brief window before round:started arrives on (re)connect).
   const role = isLayers ? (currentRole ?? getRole(LAYER_ROLES[snapshot.round]?.id) ?? LAYER_ROLES[0]!) : null;
   const totalSteps = isLayers ? loopSteps(config) : stepsPerTurn(config);
   const playLayersList: Layer[] = role
-    ? [...contextLayers, { roleId: role.id, notes: draft }]
+    ? [...contextLayers, { roleId: role.id, instrumentId: selectedInstrument, notes: draft }]
     : [];
 
   return (
@@ -99,6 +133,7 @@ export function Play() {
               <DrumGridEditor
                 config={config}
                 role={role}
+                instrumentId={selectedInstrument}
                 draft={draft}
                 contextLayers={contextLayers}
                 onChange={setDraft}
@@ -108,6 +143,8 @@ export function Play() {
               <PianoRollEditor
                 config={config}
                 role={role}
+                instrumentId={selectedInstrument}
+                unlocked={pitchUnlocked}
                 draft={draft}
                 contextLayers={contextLayers}
                 onChange={setDraft}
@@ -130,10 +167,8 @@ export function Play() {
       <footer className="dock">
         {isLayers && role ? (
           <div className="dock-group" style={{ flexDirection: "column", alignItems: "flex-start" }}>
-            <span className="dock-label">Your part</span>
-            <span className="chip" style={{ ["--sc" as string]: role.color, borderColor: role.color }}>
-              {role.name}
-            </span>
+            <span className="dock-label">{role.editor === "drum-grid" ? "Kit" : "Sound"}</span>
+            <SoundSelector role={role} />
           </div>
         ) : (
           <div className="dock-group" style={{ flexDirection: "column", alignItems: "flex-start" }}>
@@ -161,6 +196,18 @@ export function Play() {
             >
               Clear
             </button>
+            {isLayers && role && role.editor === "piano-roll" && (
+              <button
+                className={`hw-btn ${pitchUnlocked ? "hw-btn--danger" : "hw-btn--ghost"}`}
+                onClick={() => {
+                  uiClick();
+                  setPitchUnlocked(!pitchUnlocked);
+                }}
+                title={pitchUnlocked ? "Restrict to scale" : "Allow any note (out of scale)"}
+              >
+                {pitchUnlocked ? "🔓 Chromatic" : "🔒 Scale"}
+              </button>
+            )}
           </div>
         </div>
 
