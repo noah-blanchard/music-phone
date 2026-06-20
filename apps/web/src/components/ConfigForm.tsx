@@ -46,7 +46,7 @@ export function ConfigForm({ config, editable, playerCount, onChange }: Props) {
     <div className="config-stack">
       <div className="roles-pick">
         <div className="spread">
-          <span className="dock-label">Layer kinds in play</span>
+          <span className="dock-label">Kits in play</span>
           <span className={`led ${enough ? "led-dim" : ""}`} style={{ fontSize: 11, color: enough ? undefined : "var(--danger)" }}>
             {config.selectedRoles.length}/{playerCount} min
           </span>

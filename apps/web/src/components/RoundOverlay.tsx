@@ -92,7 +92,7 @@ export function RoundOverlay() {
               </div>
               {currentRole && (
                 <div className="overlay-sub" style={{ color: currentRole.color }}>
-                  ▣ Your part: {currentRole.name}
+                  ▣ Your kit: {currentRole.name}
                 </div>
               )}
             </motion.div>

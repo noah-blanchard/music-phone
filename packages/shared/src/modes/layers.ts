@@ -19,20 +19,23 @@ export function rotate(playerIndex: number, round: number, n: number): number {
 export const MAX_DRUM_VOICES = 12;
 
 /**
- * The ordered role preset. Round `r` uses `LAYER_ROLES[r]`, so with N players a
- * song stacks `LAYER_ROLES.slice(0, N)`. Colours mirror the player palette.
+ * The playable "kits". One drum part (the step sequencer) plus seven melodic
+ * kits — sound flavours that all just place notes on the piano roll, differing
+ * by their instrument pool and octave focus. The wheel deals one kit per player;
+ * the host enables a subset (>= player count). `Role`/`roleId` are the internal
+ * names; the UI calls these "Kits".
  */
 const DRUM_KITS = ["kit-synth", "kit-808", "kit-lofi"];
 
 export const LAYER_ROLES: Role[] = [
-  { id: "melody", name: "Melody", color: "#4fd0ff", editor: "piano-roll", instruments: ["lead", "fmlead", "amlead", "pluck", "saw"], octaveOffset: 1, octaves: 2, scaleLocked: true },
-  { id: "chords", name: "Chords", color: "#8b6fd6", editor: "piano-roll", instruments: ["keys", "pad", "fmkeys", "ampad"], octaveOffset: 0, octaves: 2, scaleLocked: true },
-  { id: "bass", name: "Bass", color: "#4ee6a0", editor: "piano-roll", instruments: ["bass", "monobass", "fmbass"], octaveOffset: -1, octaves: 2, scaleLocked: true },
   { id: "drums", name: "Drums", color: "#ffae42", editor: "drum-grid", instruments: DRUM_KITS, octaveOffset: 0, octaves: 1, scaleLocked: false },
-  { id: "arp", name: "Arp", color: "#f2c14e", editor: "piano-roll", instruments: ["pluck", "fmlead", "lead"], octaveOffset: 1, octaves: 2, scaleLocked: true },
-  { id: "pad", name: "Pad", color: "#3aa6a6", editor: "piano-roll", instruments: ["pad", "ampad", "fmkeys"], octaveOffset: 0, octaves: 2, scaleLocked: true },
-  { id: "lead", name: "Lead", color: "#ff7a59", editor: "piano-roll", instruments: ["saw", "lead", "fmlead", "amlead"], octaveOffset: 1, octaves: 2, scaleLocked: true },
-  { id: "perc", name: "Perc", color: "#e36cc4", editor: "drum-grid", instruments: DRUM_KITS, octaveOffset: 0, octaves: 1, scaleLocked: false },
+  { id: "lead", name: "Lead Kit", color: "#ff7a59", editor: "piano-roll", instruments: ["lead", "saw", "amlead"], octaveOffset: 1, octaves: 2, scaleLocked: true },
+  { id: "synth", name: "Synth Kit", color: "#4fd0ff", editor: "piano-roll", instruments: ["fmlead", "saw", "lead"], octaveOffset: 1, octaves: 2, scaleLocked: true },
+  { id: "bass", name: "Bass Kit", color: "#4ee6a0", editor: "piano-roll", instruments: ["bass", "monobass", "fmbass"], octaveOffset: -1, octaves: 2, scaleLocked: true },
+  { id: "pluck", name: "Pluck Kit", color: "#f2c14e", editor: "piano-roll", instruments: ["pluck", "fmlead"], octaveOffset: 1, octaves: 2, scaleLocked: true },
+  { id: "pad", name: "Pad Kit", color: "#3aa6a6", editor: "piano-roll", instruments: ["pad", "ampad"], octaveOffset: 0, octaves: 2, scaleLocked: true },
+  { id: "keys", name: "Keys Kit", color: "#8b6fd6", editor: "piano-roll", instruments: ["keys", "fmkeys"], octaveOffset: 0, octaves: 2, scaleLocked: true },
+  { id: "stab", name: "Stab Kit", color: "#e36cc4", editor: "piano-roll", instruments: ["fmkeys", "keys", "saw"], octaveOffset: 0, octaves: 2, scaleLocked: true },
 ];
 
 /** Resolve a role by id (used by both apps). */

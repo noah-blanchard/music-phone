@@ -36,6 +36,8 @@ interface Props {
   contextLayers: Layer[];
   onChange: (notes: Note[]) => void;
   playStep?: number | null;
+  /** Read-only context view (no placement/preview). */
+  readOnly?: boolean;
 }
 
 /**
@@ -55,6 +57,7 @@ export function PianoRollEditor({
   contextLayers,
   onChange,
   playStep,
+  readOnly,
 }: Props) {
   const pitches = useMemo(
     () => buildChromaticWindow(PIANO_MIN, (PIANO_MAX - PIANO_MIN) / 12).slice().reverse(),
@@ -114,6 +117,7 @@ export function PianoRollEditor({
   );
 
   const onMouseDown = (e: React.MouseEvent) => {
+    if (readOnly) return;
     const hit = locate(e.clientX, e.clientY);
     if (!hit || hit.step < 0 || hit.step >= editSteps) return;
     if (!unlocked && !inScale(hit.pitch)) return;

@@ -163,14 +163,14 @@ export interface RoomSnapshot {
  * import; `sanitizeConfig` filters selections against the real role table.
  */
 export const DEFAULT_SELECTED_ROLES = [
-  "melody",
-  "chords",
-  "bass",
   "drums",
-  "arp",
-  "pad",
   "lead",
-  "perc",
+  "synth",
+  "bass",
+  "pluck",
+  "pad",
+  "keys",
+  "stab",
 ];
 
 /** Default game configuration applied when a host creates a room. */

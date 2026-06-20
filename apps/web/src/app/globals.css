@@ -104,6 +104,31 @@
   flex-direction: column;
 }
 
+/* Adaptive split: piano roll (flex) on top, compact drum strip at the bottom */
+.stage-panes {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.stage-panes.solo {
+  justify-content: center;
+}
+.pane-piano {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+}
+.pane-drums {
+  flex: 0 0 auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+}
+
 .dock {
   flex: 0 0 auto;
   min-height: var(--dock-h);
@@ -427,29 +452,23 @@ button.strip-seg:disabled {
 }
 .wheel-stage {
   position: relative;
+  filter: drop-shadow(0 10px 30px rgba(0, 0, 0, 0.6));
 }
-.wheel-face {
-  position: absolute;
-  border-radius: 50%;
-  box-shadow:
-    0 0 0 6px #0c0d10,
-    0 0 0 8px #2a2d35,
-    0 10px 40px rgba(0, 0, 0, 0.6),
-    inset 0 0 30px rgba(0, 0, 0, 0.5);
+.wheel-seg-text {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  fill: #0c0d10;
+  font-weight: 700;
+  paint-order: stroke;
+  stroke: rgba(255, 255, 255, 0.25);
+  stroke-width: 0.4px;
+  letter-spacing: 0.02em;
+  pointer-events: none;
 }
-.wheel-hub {
-  position: absolute;
-  width: 52px;
-  height: 52px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: linear-gradient(180deg, var(--metal-3), var(--metal));
-  border: 2px solid var(--amber);
-  color: var(--amber);
-  font-size: 22px;
-  box-shadow: 0 0 18px var(--amber-glow);
-  z-index: 3;
+.wheel-hub-text {
+  font-family: var(--font-display);
+  font-size: 20px;
+  fill: var(--amber);
 }
 .wheel-avatar {
   position: absolute;

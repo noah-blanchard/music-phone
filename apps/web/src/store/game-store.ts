@@ -10,8 +10,11 @@ import type {
   ScaleType,
   ServerMessage,
 } from "@musicphone/shared";
-import { roleDefaultSound } from "@musicphone/shared";
 import { wsUrl } from "@/lib/eden";
+
+function randomFrom<T>(arr: readonly T[]): T | undefined {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
 
 /** Per-song musical params handed to the local player this round. */
 export interface SongParams {
@@ -41,6 +44,8 @@ interface GameState {
   pitchUnlocked: boolean;
   /** Whether the local player has submitted the current round. */
   submitted: boolean;
+  /** Rerolls left for the rolled instrument this round (starts at 1). */
+  rerollsLeft: number;
   /** Finished songs, populated on game:finished. */
   finishedMelodies: Melody[];
   /** Local, editable notes for the current turn. */
@@ -55,7 +60,8 @@ interface GameState {
 
   setDraft: (notes: Note[]) => void;
   clearDraft: () => void;
-  setInstrument: (instrumentId: string) => void;
+  /** Reroll the rolled instrument (once per round) from the kit's pool. */
+  rerollInstrument: () => void;
   setPitchUnlocked: (unlocked: boolean) => void;
 
   startGame: () => void;
@@ -84,6 +90,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   selectedInstrument: "",
   pitchUnlocked: false,
   submitted: false,
+  rerollsLeft: 1,
   finishedMelodies: [],
   draft: [],
   connected: false,
@@ -161,10 +168,13 @@ export const useGameStore = create<GameState>((set, get) => ({
     send({ type: "turn:autosave", notes: [], instrumentId: get().selectedInstrument });
   },
 
-  setInstrument: (instrumentId) => {
-    set({ selectedInstrument: instrumentId });
-    // Persist the choice even if the draft isn't edited again before submit.
-    send({ type: "turn:autosave", notes: get().draft, instrumentId });
+  rerollInstrument: () => {
+    const { rerollsLeft, currentRole, selectedInstrument } = get();
+    if (rerollsLeft <= 0 || !currentRole) return;
+    const others = currentRole.instruments.filter((id) => id !== selectedInstrument);
+    const next = randomFrom(others.length ? others : currentRole.instruments) ?? selectedInstrument;
+    set({ selectedInstrument: next, rerollsLeft: rerollsLeft - 1 });
+    send({ type: "turn:autosave", notes: get().draft, instrumentId: next });
   },
   setPitchUnlocked: (pitchUnlocked) => set({ pitchUnlocked }),
 
@@ -198,7 +208,8 @@ function dispatch(
         currentRole: msg.role,
         currentSong: msg.song,
         isFirstLayer: msg.isFirstLayer,
-        selectedInstrument: roleDefaultSound(msg.role),
+        selectedInstrument: randomFrom(msg.role.instruments) ?? "",
+        rerollsLeft: 1,
         pitchUnlocked: false,
         submitted: false,
         draft: [],

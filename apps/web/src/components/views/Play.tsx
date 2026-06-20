@@ -1,61 +1,34 @@
 "use client";
 
 import { useState } from "react";
-import { SCALE_LABELS, getRole, loopSteps, noteLabel, type Layer, type Role } from "@musicphone/shared";
+import { SCALE_LABELS, getRole, loopSteps, noteLabel, type Layer } from "@musicphone/shared";
 import { useGameStore } from "@/store/game-store";
 import { PianoRollEditor } from "@/components/editors/PianoRollEditor";
 import { DrumGridEditor } from "@/components/editors/DrumGridEditor";
 import { TransportControls } from "@/components/TransportControls";
 import { RoundTimer } from "@/components/RoundTimer";
 import { RoundOverlay } from "@/components/RoundOverlay";
-import { ensureAudio, previewDrum, previewInstrument } from "@/lib/audio/engine";
 import { getInstrumentLabel } from "@/lib/audio/instruments";
 import { getDrumKitLabel } from "@/lib/audio/drums";
 import { uiClick, uiConfirm } from "@/lib/audio/sfx";
 
 const CONTEXT_HINT: Record<string, string> = {
-  previous: "You can see & hear the previous player's layer.",
-  all: "You can see & hear everything built so far.",
+  previous: "You can see & hear the previous layer.",
+  all: "You can see & hear everything so far.",
   blind: "You're going in blind — no preview of the other layers.",
 };
 
-/** Sound (instrument / drum-kit) picker for the active role. */
-function SoundSelector({ role }: { role: Role }) {
-  const selected = useGameStore((s) => s.selectedInstrument);
-  const setInstrument = useGameStore((s) => s.setInstrument);
-  const isDrums = role.editor === "drum-grid";
-  const label = (id: string) => (isDrums ? getDrumKitLabel(id) : getInstrumentLabel(id));
+const noop = () => {};
 
-  return (
-    <div className="sound-keys">
-      {role.instruments.map((id) => (
-        <button
-          key={id}
-          type="button"
-          className={`sound-key${selected === id ? " selected" : ""}`}
-          style={{ ["--tc" as string]: role.color }}
-          onClick={() => {
-            uiClick();
-            setInstrument(id);
-            void ensureAudio().then(() =>
-              isDrums ? previewDrum(id, 0) : previewInstrument(id, role.octaveOffset * 12 + 67),
-            );
-          }}
-        >
-          {label(id)}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-/** Active turn: add one role's layer over the shared loop, with prior layers as context. */
+/** Active turn: add your kit's layer over the shared loop, with prior layers as context. */
 export function Play() {
   const snapshot = useGameStore((s) => s.snapshot)!;
   const contextLayers = useGameStore((s) => s.contextLayers);
   const currentRole = useGameStore((s) => s.currentRole);
   const currentSong = useGameStore((s) => s.currentSong);
   const selectedInstrument = useGameStore((s) => s.selectedInstrument);
+  const rerollsLeft = useGameStore((s) => s.rerollsLeft);
+  const rerollInstrument = useGameStore((s) => s.rerollInstrument);
   const pitchUnlocked = useGameStore((s) => s.pitchUnlocked);
   const setPitchUnlocked = useGameStore((s) => s.setPitchUnlocked);
   const submitted = useGameStore((s) => s.submitted);
@@ -69,12 +42,18 @@ export function Play() {
   const { config } = snapshot;
   const readyCount = snapshot.players.filter((p) => snapshot.ready[p.id]).length;
 
-  // Role + song come from round:started; fall back to the assignment snapshot.
   const role = currentRole ?? getRole(snapshot.assignments[snapshot.selfId]);
-  if (!role || !currentSong) return <div className="center muted">Dealing your part…</div>;
+  if (!role || !currentSong) return <div className="center muted">Dealing your kit…</div>;
+
+  const isDrum = role.editor === "drum-grid";
+  const hasMelodicCtx = contextLayers.some((l) => getRole(l.roleId)?.editor === "piano-roll");
+  const hasDrumCtx = contextLayers.some((l) => getRole(l.roleId)?.editor === "drum-grid");
+  const showPiano = !isDrum || hasMelodicCtx;
+  const showDrums = isDrum || hasDrumCtx;
 
   const totalSteps = loopSteps(config);
   const playLayersList: Layer[] = [...contextLayers, { roleId: role.id, instrumentId: selectedInstrument, notes: draft }];
+  const soundLabel = isDrum ? getDrumKitLabel(selectedInstrument) : getInstrumentLabel(selectedInstrument);
 
   return (
     <div className="fill">
@@ -96,7 +75,7 @@ export function Play() {
       <main className="stage">
         <div className="stage-head">
           <h2>
-            Add the <span style={{ color: role.color }}>{role.name}</span>
+            Your kit · <span style={{ color: role.color }}>{role.name}</span>
           </h2>
           <span className="muted" style={{ fontSize: 12 }}>
             {noteLabel(currentSong.root).replace(/\d+$/, "")} {SCALE_LABELS[currentSong.scale]} ·{" "}
@@ -104,38 +83,60 @@ export function Play() {
           </span>
         </div>
 
-        <div className="screen stage-screen">
-          {role.editor === "drum-grid" ? (
-            <DrumGridEditor
-              config={config}
-              role={role}
-              instrumentId={selectedInstrument}
-              draft={draft}
-              contextLayers={contextLayers}
-              onChange={setDraft}
-              playStep={playStep}
-            />
-          ) : (
-            <PianoRollEditor
-              config={config}
-              role={role}
-              songRoot={currentSong.root}
-              songScale={currentSong.scale}
-              instrumentId={selectedInstrument}
-              unlocked={pitchUnlocked}
-              draft={draft}
-              contextLayers={contextLayers}
-              onChange={setDraft}
-              playStep={playStep}
-            />
+        <div className={`stage-panes${showPiano ? "" : " solo"}`}>
+          {showPiano && (
+            <div className="screen pane-piano">
+              <PianoRollEditor
+                config={config}
+                role={role}
+                songRoot={currentSong.root}
+                songScale={currentSong.scale}
+                instrumentId={selectedInstrument}
+                unlocked={pitchUnlocked}
+                draft={isDrum ? [] : draft}
+                contextLayers={contextLayers}
+                onChange={isDrum ? noop : setDraft}
+                playStep={playStep}
+                readOnly={isDrum}
+              />
+            </div>
+          )}
+          {showDrums && (
+            <div className="screen pane-drums">
+              <DrumGridEditor
+                config={config}
+                role={role}
+                instrumentId={selectedInstrument}
+                draft={isDrum ? draft : []}
+                contextLayers={contextLayers}
+                onChange={isDrum ? setDraft : noop}
+                playStep={playStep}
+                readOnly={!isDrum}
+              />
+            </div>
           )}
         </div>
       </main>
 
       <footer className="dock">
         <div className="dock-group" style={{ flexDirection: "column", alignItems: "flex-start" }}>
-          <span className="dock-label">{role.editor === "drum-grid" ? "Kit" : "Sound"}</span>
-          <SoundSelector role={role} />
+          <span className="dock-label">Sound</span>
+          <div className="row" style={{ gap: 8 }}>
+            <span className="chip" style={{ ["--sc" as string]: role.color, borderColor: role.color }}>
+              {soundLabel}
+            </span>
+            <button
+              className="hw-btn hw-btn--ghost"
+              disabled={rerollsLeft <= 0}
+              onClick={() => {
+                uiClick();
+                rerollInstrument();
+              }}
+              title="Reroll the sound (once)"
+            >
+              🎲 Reroll ({rerollsLeft})
+            </button>
+          </div>
         </div>
 
         <div className="dock-group" style={{ flexDirection: "column", alignItems: "flex-start" }}>
@@ -156,7 +157,7 @@ export function Play() {
             >
               Clear
             </button>
-            {role.editor === "piano-roll" && (
+            {!isDrum && (
               <button
                 className={`hw-btn ${pitchUnlocked ? "hw-btn--danger" : "hw-btn--ghost"}`}
                 onClick={() => {

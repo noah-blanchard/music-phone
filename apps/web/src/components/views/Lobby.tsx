@@ -98,7 +98,7 @@ export function Lobby() {
               {!enoughPlayers
                 ? `Need ${MIN_PLAYERS - playerCount} more`
                 : !enoughRoles
-                  ? `Pick ${playerCount - snapshot.config.selectedRoles.length} more layer kind(s)`
+                  ? `Pick ${playerCount - snapshot.config.selectedRoles.length} more kit(s)`
                   : "▶ Start game"}
             </button>
           )}
