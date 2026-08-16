@@ -1,7 +1,14 @@
 "use client";
 
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { getRole, loopSteps, type GameConfig, type Layer, type Note, type Role } from "@musicphone/shared";
+import {
+  getRole,
+  loopSteps,
+  type GameConfig,
+  type Layer,
+  type Note,
+  type Role,
+} from "@musicphone/shared";
 import { DRUM_LANES } from "@/lib/audio/drums";
 import { ensureAudio, previewDrum } from "@/lib/audio/engine";
 
@@ -130,11 +137,20 @@ export function DrumGridEditor({
             {!readOnly && (
               <span className="dg-fills">
                 {FILLS.map((f) => (
-                  <button key={f.step} className="dg-fill" title={`Every ${f.label}`} onClick={() => fillLane(l.index, f.step)}>
+                  <button
+                    key={f.step}
+                    className="dg-fill"
+                    title={`Every ${f.label}`}
+                    onClick={() => fillLane(l.index, f.step)}
+                  >
                     {f.label}
                   </button>
                 ))}
-                <button className="dg-fill dg-clear" title="Clear lane" onClick={() => clearLane(l.index)}>
+                <button
+                  className="dg-fill dg-clear"
+                  title="Clear lane"
+                  onClick={() => clearLane(l.index)}
+                >
                   ✕
                 </button>
               </span>
@@ -154,12 +170,22 @@ export function DrumGridEditor({
               />
             ))}
             {lanes.map((l) => (
-              <div key={`rl-${l.id}`} className="pr-rowline" style={{ top: (l.index + 1) * LANE_H - 1, width: gridW }} />
+              <div
+                key={`rl-${l.id}`}
+                className="pr-rowline"
+                style={{ top: (l.index + 1) * LANE_H - 1, width: gridW }}
+              />
             ))}
 
             {Array.from({ length: editSteps + 1 }).map((_, c) => {
               const cls = c % config.stepsPerMeasure === 0 ? "measure" : c % 4 === 0 ? "beat" : "";
-              return <div key={`col-${c}`} className={`pr-col ${cls}`} style={{ left: c * cellW, height: gridH }} />;
+              return (
+                <div
+                  key={`col-${c}`}
+                  className={`pr-col ${cls}`}
+                  style={{ left: c * cellW, height: gridH }}
+                />
+              );
             })}
 
             {playStep != null && playStep >= 0 && (
@@ -168,10 +194,13 @@ export function DrumGridEditor({
 
             {drumContext.flatMap((layer, li) => {
               const color = getRole(layer.roleId)?.color ?? "#888";
-              return layer.notes.map((n, ni) => cell(n.pitch, n.start, color, true, `ctx-${li}-${ni}`));
+              return layer.notes.map((n, ni) =>
+                cell(n.pitch, n.start, color, true, `ctx-${li}-${ni}`),
+              );
             })}
 
-            {!readOnly && draft.map((n, i) => cell(n.pitch, n.start, role.color, false, `hit-${i}`))}
+            {!readOnly &&
+              draft.map((n, i) => cell(n.pitch, n.start, role.color, false, `hit-${i}`))}
           </>
         )}
       </div>

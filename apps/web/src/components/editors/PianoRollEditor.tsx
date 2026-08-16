@@ -60,12 +60,15 @@ export function PianoRollEditor({
   readOnly,
 }: Props) {
   const pitches = useMemo(
-    () => buildChromaticWindow(PIANO_MIN, (PIANO_MAX - PIANO_MIN) / 12).slice().reverse(),
+    () =>
+      buildChromaticWindow(PIANO_MIN, (PIANO_MAX - PIANO_MIN) / 12)
+        .slice()
+        .reverse(),
     [],
   );
   const inScale = useCallback(
     (p: number) => {
-      const cls = ((p - songRoot) % 12 + 12) % 12;
+      const cls = (((p - songRoot) % 12) + 12) % 12;
       return SCALE_INTERVALS[songScale].includes(cls);
     },
     [songRoot, songScale],
@@ -206,7 +209,12 @@ export function PianoRollEditor({
         </div>
 
         {/* Grid */}
-        <div ref={gridRef} className="pr-grid" style={{ height: contentH }} onMouseDown={onMouseDown}>
+        <div
+          ref={gridRef}
+          className="pr-grid"
+          style={{ height: contentH }}
+          onMouseDown={onMouseDown}
+        >
           {ready && (
             <>
               {pitches.map((p, r) => {
@@ -234,7 +242,8 @@ export function PianoRollEditor({
               ))}
 
               {Array.from({ length: editSteps + 1 }).map((_, c) => {
-                const cls = c % config.stepsPerMeasure === 0 ? "measure" : c % 4 === 0 ? "beat" : "";
+                const cls =
+                  c % config.stepsPerMeasure === 0 ? "measure" : c % 4 === 0 ? "beat" : "";
                 return (
                   <div
                     key={`col-${c}`}

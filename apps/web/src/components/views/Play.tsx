@@ -52,8 +52,13 @@ export function Play() {
   const showDrums = isDrum || hasDrumCtx;
 
   const totalSteps = loopSteps(config);
-  const playLayersList: Layer[] = [...contextLayers, { roleId: role.id, instrumentId: selectedInstrument, notes: draft }];
-  const soundLabel = isDrum ? getDrumKitLabel(selectedInstrument) : getInstrumentLabel(selectedInstrument);
+  const playLayersList: Layer[] = [
+    ...contextLayers,
+    { roleId: role.id, instrumentId: selectedInstrument, notes: draft },
+  ];
+  const soundLabel = isDrum
+    ? getDrumKitLabel(selectedInstrument)
+    : getInstrumentLabel(selectedInstrument);
 
   return (
     <div className="fill">
@@ -79,7 +84,8 @@ export function Play() {
           </h2>
           <span className="muted" style={{ fontSize: 12 }}>
             {noteLabel(currentSong.root).replace(/\d+$/, "")} {SCALE_LABELS[currentSong.scale]} ·{" "}
-            {currentSong.bpm} BPM · {config.barsPerSong}-bar loop · {CONTEXT_HINT[config.contextVisibility]}
+            {currentSong.bpm} BPM · {config.barsPerSong}-bar loop ·{" "}
+            {CONTEXT_HINT[config.contextVisibility]}
           </span>
         </div>
 
@@ -122,7 +128,10 @@ export function Play() {
         <div className="dock-group" style={{ flexDirection: "column", alignItems: "flex-start" }}>
           <span className="dock-label">Sound</span>
           <div className="row" style={{ gap: 8 }}>
-            <span className="chip" style={{ ["--sc" as string]: role.color, borderColor: role.color }}>
+            <span
+              className="chip"
+              style={{ ["--sc" as string]: role.color, borderColor: role.color }}
+            >
               {soundLabel}
             </span>
             <button

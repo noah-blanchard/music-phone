@@ -24,7 +24,9 @@ export interface RoomCredentials {
 
 export async function createRoom(
   nickname: string,
-  config?: Partial<Pick<GameConfig, "barsPerSong" | "contextVisibility" | "selectedRoles" | "roundDurationSec">>,
+  config?: Partial<
+    Pick<GameConfig, "barsPerSong" | "contextVisibility" | "selectedRoles" | "roundDurationSec">
+  >,
 ): Promise<RoomCredentials> {
   const { data, error } = await api.rooms.post({ nickname, config });
   if (error || !data) throw new Error("Could not create room");

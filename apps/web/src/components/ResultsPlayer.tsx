@@ -142,7 +142,10 @@ function ActiveSong({
       await ensureAudio();
       if (cancelled) return;
       const layers = stackLayers(song, revealed).filter((_, i) => !muted.has(i));
-      handleRef.current = playLayers(layers, song.bpm, loopLength(config), { loop: true, onStep: setStep });
+      handleRef.current = playLayers(layers, song.bpm, loopLength(config), {
+        loop: true,
+        onStep: setStep,
+      });
     })();
     return () => {
       cancelled = true;
@@ -199,10 +202,23 @@ function ActiveSong({
           >
             {playing ? "■" : "▶"}
           </button>
-          <button className="hw-btn" onClick={() => { uiClick(); setReveal(index, Math.min(revealed + 1, total), true); }} disabled={revealed >= total}>
+          <button
+            className="hw-btn"
+            onClick={() => {
+              uiClick();
+              setReveal(index, Math.min(revealed + 1, total), true);
+            }}
+            disabled={revealed >= total}
+          >
             Reveal next layer
           </button>
-          <button className="hw-btn hw-btn--ghost" onClick={() => { uiClick(); setReveal(index + 1, 0, false); }}>
+          <button
+            className="hw-btn hw-btn--ghost"
+            onClick={() => {
+              uiClick();
+              setReveal(index + 1, 0, false);
+            }}
+          >
             {last ? "Finish ▸" : "Next song ▸"}
           </button>
         </div>
@@ -212,7 +228,7 @@ function ActiveSong({
         {song.segments.map((seg, si) => {
           const role = roleOfSegment(seg.order, seg.roleId) ?? getRole(seg.roleId);
           const shown = si < revealed;
-          const color = shown ? role?.color ?? "#888" : "#2a2d35";
+          const color = shown ? (role?.color ?? "#888") : "#2a2d35";
           const isMuted = muted.has(si);
           return (
             <button
@@ -221,7 +237,11 @@ function ActiveSong({
               style={{ ["--sc" as string]: color }}
               disabled={!shown}
               onClick={() => toggleMute(si)}
-              title={shown ? `${role?.name ?? "Layer"} — ${seg.authorName}${isMuted ? " (muted)" : ""}` : "Hidden"}
+              title={
+                shown
+                  ? `${role?.name ?? "Layer"} — ${seg.authorName}${isMuted ? " (muted)" : ""}`
+                  : "Hidden"
+              }
             >
               {shown ? `${role?.name ?? "Layer"} · ${seg.authorName}` : "?"}
             </button>

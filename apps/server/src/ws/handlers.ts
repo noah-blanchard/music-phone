@@ -27,7 +27,8 @@ export function handleClientMessage(
   switch (msg.type) {
     case "game:start": {
       const error = manager.startGame(code, playerId);
-      if (error) manager.send(code, playerId, { type: "error", code: "start_failed", message: error });
+      if (error)
+        manager.send(code, playerId, { type: "error", code: "start_failed", message: error });
       break;
     }
     case "config:update":

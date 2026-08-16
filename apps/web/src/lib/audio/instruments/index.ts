@@ -16,8 +16,18 @@ export type { Instrument, InstrumentDef } from "./types";
 
 /** Registry of all pitched instruments. Add a sound = add a file + an entry. */
 const DEFS: InstrumentDef[] = [
-  lead, keys, bass, pluck, pad, saw,
-  fmlead, amlead, monobass, fmbass, fmkeys, ampad,
+  lead,
+  keys,
+  bass,
+  pluck,
+  pad,
+  saw,
+  fmlead,
+  amlead,
+  monobass,
+  fmbass,
+  fmkeys,
+  ampad,
 ];
 
 const byId = new Map(DEFS.map((d) => [d.id, d]));

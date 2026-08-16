@@ -54,13 +54,7 @@
 }
 /* Out-of-scale, scale-lock ON: unmistakably dead/blacked-out key. */
 .pr-key.locked {
-  background: repeating-linear-gradient(
-    -45deg,
-    #050506,
-    #050506 5px,
-    #0c0c0e 5px,
-    #0c0c0e 10px
-  );
+  background: repeating-linear-gradient(-45deg, #050506, #050506 5px, #0c0c0e 5px, #0c0c0e 10px);
   color: transparent;
 }
 
@@ -127,7 +121,9 @@
   box-shadow:
     inset 0 0 0 1px rgba(0, 0, 0, 0.35),
     0 0 8px -1px var(--nc, var(--amber));
-  transition: box-shadow 0.08s ease, filter 0.08s ease;
+  transition:
+    box-shadow 0.08s ease,
+    filter 0.08s ease;
 }
 .pr-note.flash {
   filter: brightness(1.5);
@@ -153,7 +149,9 @@
   box-shadow:
     inset 0 0 0 1px rgba(0, 0, 0, 0.35),
     0 0 8px -1px var(--nc, var(--amber));
-  transition: filter 0.08s ease, box-shadow 0.08s ease;
+  transition:
+    filter 0.08s ease,
+    box-shadow 0.08s ease;
 }
 .dg-hit.flash {
   filter: brightness(1.6);

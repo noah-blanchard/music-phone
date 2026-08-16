@@ -274,7 +274,9 @@ export class RoomManager {
     if (!room) return "Room not found";
     if (playerId !== room.hostId) return "Only the host can start the game";
     if (room.phase !== "lobby") return "Game already started";
-    console.log(`Starting game in room ${code} hosted by ${playerId}, MIN_PLAYERS=${MIN_PLAYERS}, players=${room.players.length}`);
+    console.log(
+      `Starting game in room ${code} hosted by ${playerId}, MIN_PLAYERS=${MIN_PLAYERS}, players=${room.players.length}`,
+    );
     if (room.players.length < MIN_PLAYERS) return `Need at least ${MIN_PLAYERS} players`;
 
     const mode = getMode(room.config.mode);
@@ -370,7 +372,11 @@ export class RoomManager {
     const room = this.rooms.get(code);
     const rt = this.runtimes.get(code);
     if (!room || !rt || room.phase !== "playing") return;
-    const clean = getMode(room.config.mode).validateTurn(notes, room.config, this.roleOf(room, playerId));
+    const clean = getMode(room.config.mode).validateTurn(
+      notes,
+      room.config,
+      this.roleOf(room, playerId),
+    );
     rt.drafts.set(playerId, clean);
     if (instrumentId) rt.instruments.set(playerId, instrumentId);
   }
@@ -379,7 +385,11 @@ export class RoomManager {
     const room = this.rooms.get(code);
     const rt = this.runtimes.get(code);
     if (!room || !rt || room.phase !== "playing") return;
-    const clean = getMode(room.config.mode).validateTurn(notes, room.config, this.roleOf(room, playerId));
+    const clean = getMode(room.config.mode).validateTurn(
+      notes,
+      room.config,
+      this.roleOf(room, playerId),
+    );
     rt.pending.set(playerId, clean);
     rt.drafts.set(playerId, clean);
     if (instrumentId) rt.instruments.set(playerId, instrumentId);

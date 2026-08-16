@@ -5,8 +5,7 @@
 /* Brushed-metal beveled panel */
 .panel {
   position: relative;
-  background:
-    linear-gradient(180deg, var(--metal-2), var(--metal));
+  background: linear-gradient(180deg, var(--metal-2), var(--metal));
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
   box-shadow:
@@ -22,11 +21,7 @@
   border-radius: inherit;
   pointer-events: none;
   opacity: 0.04;
-  background: repeating-linear-gradient(
-    90deg,
-    #fff 0 1px,
-    transparent 1px 3px
-  );
+  background: repeating-linear-gradient(90deg, #fff 0 1px, transparent 1px 3px);
 }
 
 /* Dark CRT-style display surface (piano roll, readouts) */
@@ -46,11 +41,7 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: repeating-linear-gradient(
-    0deg,
-    rgba(0, 0, 0, 0.16) 0 1px,
-    transparent 1px 3px
-  );
+  background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.16) 0 1px, transparent 1px 3px);
   opacity: 0.5;
 }
 
@@ -91,7 +82,10 @@
     inset 0 1px 0 var(--bevel-hi),
     0 3px 0 var(--bevel-lo),
     0 6px 14px -6px rgba(0, 0, 0, 0.7);
-  transition: transform 0.06s ease, box-shadow 0.06s ease, filter 0.12s ease;
+  transition:
+    transform 0.06s ease,
+    box-shadow 0.06s ease,
+    filter 0.12s ease;
 }
 .hw-btn:hover:not(:disabled) {
   filter: brightness(1.12);
@@ -147,7 +141,9 @@
 }
 .led-dot[data-on="true"] {
   background: var(--vu-green);
-  box-shadow: 0 0 8px rgba(90, 209, 122, 0.8), inset 0 0 0 1px rgba(0, 0, 0, 0.3);
+  box-shadow:
+    0 0 8px rgba(90, 209, 122, 0.8),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.3);
 }
 .led-dot[data-color] {
   background: var(--c, var(--vu-green));
@@ -249,7 +245,9 @@ select.input {
 .input:focus {
   outline: none;
   border-color: var(--amber);
-  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.6), 0 0 0 1px var(--amber-glow);
+  box-shadow:
+    inset 0 2px 6px rgba(0, 0, 0, 0.6),
+    0 0 0 1px var(--amber-glow);
 }
 
 /* Layout helpers */

@@ -12,8 +12,7 @@
   position: fixed;
   inset: 0;
   overflow: hidden;
-  background:
-    radial-gradient(900px 500px at 50% 120%, rgba(255, 158, 44, 0.1), transparent 60%);
+  background: radial-gradient(900px 500px at 50% 120%, rgba(255, 158, 44, 0.1), transparent 60%);
 }
 .title-grid {
   position: absolute;
@@ -172,8 +171,12 @@
   font-family: var(--font-mono);
   font-size: 11px;
   cursor: pointer;
-  box-shadow: inset 0 1px 0 var(--bevel-hi), 0 3px 0 var(--bevel-lo);
-  transition: transform 0.06s ease, filter 0.12s ease;
+  box-shadow:
+    inset 0 1px 0 var(--bevel-hi),
+    0 3px 0 var(--bevel-lo);
+  transition:
+    transform 0.06s ease,
+    filter 0.12s ease;
 }
 .sound-key:hover {
   filter: brightness(1.12);
@@ -181,7 +184,9 @@
 .sound-key.selected {
   border-color: var(--tc);
   color: var(--cream);
-  box-shadow: inset 0 1px 0 var(--bevel-hi), 0 0 16px -2px var(--tc);
+  box-shadow:
+    inset 0 1px 0 var(--bevel-hi),
+    0 0 16px -2px var(--tc);
 }
 
 /* -------------------------------- Lobby --------------------------------- */
@@ -271,8 +276,12 @@
   font-family: var(--font-mono);
   font-size: 12px;
   cursor: pointer;
-  box-shadow: inset 0 1px 0 var(--bevel-hi), 0 3px 0 var(--bevel-lo);
-  transition: transform 0.06s ease, filter 0.12s ease;
+  box-shadow:
+    inset 0 1px 0 var(--bevel-hi),
+    0 3px 0 var(--bevel-lo);
+  transition:
+    transform 0.06s ease,
+    filter 0.12s ease;
 }
 .role-chip:hover {
   filter: brightness(1.12);
@@ -284,7 +293,9 @@
 .role-chip.on {
   border-color: var(--tc);
   color: var(--cream);
-  box-shadow: inset 0 0 0 1px var(--tc), 0 0 14px -3px var(--tc);
+  box-shadow:
+    inset 0 0 0 1px var(--tc),
+    0 0 14px -3px var(--tc);
 }
 
 /* Player avatar */
@@ -295,7 +306,9 @@
   color: #11100c;
   font-weight: 800;
   font-family: var(--font-display);
-  box-shadow: 0 0 14px -2px var(--av, var(--amber)), inset 0 0 0 2px rgba(0, 0, 0, 0.25);
+  box-shadow:
+    0 0 14px -2px var(--av, var(--amber)),
+    inset 0 0 0 2px rgba(0, 0, 0, 0.25);
   background: var(--av, var(--amber));
 }
 

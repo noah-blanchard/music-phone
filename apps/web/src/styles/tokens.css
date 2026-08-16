@@ -62,8 +62,7 @@ body {
   padding: 0;
   height: 100%;
   background:
-    radial-gradient(1200px 600px at 50% -10%, rgba(255, 158, 44, 0.06), transparent 60%),
-    var(--bg);
+    radial-gradient(1200px 600px at 50% -10%, rgba(255, 158, 44, 0.06), transparent 60%), var(--bg);
   color: var(--text);
   font-family: var(--font-mono);
   -webkit-font-smoothing: antialiased;

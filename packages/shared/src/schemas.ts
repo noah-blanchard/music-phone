@@ -41,11 +41,19 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
         : null;
     case "turn:autosave":
       return Array.isArray(raw.notes)
-        ? { type: "turn:autosave", notes: raw.notes as Note[], instrumentId: cleanInstrumentId(raw.instrumentId) }
+        ? {
+            type: "turn:autosave",
+            notes: raw.notes as Note[],
+            instrumentId: cleanInstrumentId(raw.instrumentId),
+          }
         : null;
     case "turn:submit":
       return Array.isArray(raw.notes)
-        ? { type: "turn:submit", notes: raw.notes as Note[], instrumentId: cleanInstrumentId(raw.instrumentId) }
+        ? {
+            type: "turn:submit",
+            notes: raw.notes as Note[],
+            instrumentId: cleanInstrumentId(raw.instrumentId),
+          }
         : null;
     case "reveal:update":
       return isFiniteInt(raw.activeSong) &&

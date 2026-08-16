@@ -1,5 +1,11 @@
 import * as Tone from "tone";
-import { getRole, midiToToneNote, roleDefaultSound, type Layer, type Note } from "@musicphone/shared";
+import {
+  getRole,
+  midiToToneNote,
+  roleDefaultSound,
+  type Layer,
+  type Note,
+} from "@musicphone/shared";
 import { getInstrument } from "./instruments";
 import { getDrumKitVoices } from "./drums";
 

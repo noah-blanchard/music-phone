@@ -78,9 +78,13 @@ const app = new Elysia()
     query: t.Object({ code: t.String(), playerId: t.String() }),
     open(ws) {
       const { code, playerId } = ws.data.query;
-      const ok = manager.connect(code.toUpperCase(), playerId, (msg) => ws.send(JSON.stringify(msg)));
+      const ok = manager.connect(code.toUpperCase(), playerId, (msg) =>
+        ws.send(JSON.stringify(msg)),
+      );
       if (!ok) {
-        ws.send(JSON.stringify({ type: "error", code: "join_failed", message: "Unknown room or player" }));
+        ws.send(
+          JSON.stringify({ type: "error", code: "join_failed", message: "Unknown room or player" }),
+        );
         ws.close();
         return;
       }

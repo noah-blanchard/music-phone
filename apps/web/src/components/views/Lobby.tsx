@@ -64,7 +64,10 @@ export function Lobby() {
                 </>
               ) : (
                 <>
-                  <div className="avatar" style={{ width: 44, height: 44, background: "#2a2d35" }} />
+                  <div
+                    className="avatar"
+                    style={{ width: 44, height: 44, background: "#2a2d35" }}
+                  />
                   <span className="strip-name muted">open</span>
                 </>
               )}

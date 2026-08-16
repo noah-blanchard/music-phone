@@ -23,7 +23,11 @@ export function RoundTimer({ endsAt }: Props) {
   return (
     <span
       className="led"
-      style={{ fontSize: 26, color: low ? "var(--vu-red)" : undefined, textShadow: low ? "0 0 12px rgba(224,86,86,0.6)" : undefined }}
+      style={{
+        fontSize: 26,
+        color: low ? "var(--vu-red)" : undefined,
+        textShadow: low ? "0 0 12px rgba(224,86,86,0.6)" : undefined,
+      }}
     >
       {mm}:{ss}
     </span>

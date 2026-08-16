@@ -39,8 +39,7 @@ export function RoundOverlay() {
     at(tick * 4, () => setStage(null));
   }, [reduce]);
 
-  const hasIntro =
-    !!snapshot && Object.keys(snapshot.assignments).length > 0 && !!currentSong;
+  const hasIntro = !!snapshot && Object.keys(snapshot.assignments).length > 0 && !!currentSong;
 
   useEffect(() => {
     if (roundCue === 0 || !snapshot) return;

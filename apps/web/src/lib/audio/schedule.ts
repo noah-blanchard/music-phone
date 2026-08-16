@@ -1,4 +1,10 @@
-import { loopSteps, roleOfSegment, type GameConfig, type Layer, type Melody } from "@musicphone/shared";
+import {
+  loopSteps,
+  roleOfSegment,
+  type GameConfig,
+  type Layer,
+  type Melody,
+} from "@musicphone/shared";
 
 /**
  * Turn a song into stacked playback layers (all over the same

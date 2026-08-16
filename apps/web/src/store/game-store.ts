@@ -102,7 +102,9 @@ export const useGameStore = create<GameState>((set, get) => ({
     reconnectArgs = { code, playerId };
     if (socket) socket.close();
 
-    const ws = new WebSocket(`${wsUrl()}/ws?code=${encodeURIComponent(code)}&playerId=${encodeURIComponent(playerId)}`);
+    const ws = new WebSocket(
+      `${wsUrl()}/ws?code=${encodeURIComponent(code)}&playerId=${encodeURIComponent(playerId)}`,
+    );
     socket = ws;
 
     // Guard every handler with `socket === ws`: in React StrictMode the effect
@@ -158,7 +160,8 @@ export const useGameStore = create<GameState>((set, get) => ({
     set({ draft: notes });
     if (autosaveTimer) clearTimeout(autosaveTimer);
     autosaveTimer = setTimeout(
-      () => send({ type: "turn:autosave", notes: get().draft, instrumentId: get().selectedInstrument }),
+      () =>
+        send({ type: "turn:autosave", notes: get().draft, instrumentId: get().selectedInstrument }),
       600,
     );
   },
