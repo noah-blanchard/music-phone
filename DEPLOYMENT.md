@@ -25,14 +25,34 @@ never needs to be exposed publicly.
 
 ## 3. Server application
 
-New **Application** from this repository, branch `master`:
+New **Application**. Both applications are configured identically except for one
+field — the Dockerfile path — since they are two images built from the same repo.
 
-| Setting             | Value                                                              |
-| ------------------- | ------------------------------------------------------------------ |
-| Build type          | `Dockerfile`                                                       |
-| Dockerfile path     | `apps/server/Dockerfile`                                           |
-| Docker context path | `.`                                                                |
-| Domain              | `api.example.com` → container port **3001**, HTTPS + Let's Encrypt |
+**Provider** panel:
+
+| Field         | Value                                                                        |
+| ------------- | ---------------------------------------------------------------------------- |
+| Provider      | Github                                                                       |
+| Repository    | this repository                                                              |
+| Branch        | `master`                                                                     |
+| Build Path    | `/` — leave it alone, see below                                              |
+| Trigger Type  | On Push                                                                      |
+| Watch Paths   | optional: `apps/server/**`, `packages/shared/**`, `package.json`, `bun.lock` |
+
+**Build Type** panel:
+
+| Field               | Value                                        |
+| ------------------- | -------------------------------------------- |
+| Build Type          | Dockerfile                                   |
+| Docker File         | `apps/server/Dockerfile`                     |
+| Docker Context Path | empty — the default `.` is the repo root     |
+| Docker Build Stage  | empty — the image is single-stage            |
+
+Neither Build Path nor Docker Context Path may be narrowed to `apps/server`.
+Both Dockerfiles copy `package.json`, `bun.lock` and `packages/shared` from the
+repo root, so a narrower context fails on the first `COPY`.
+
+**Domain**: `api.example.com` → container port **3001**, HTTPS + Let's Encrypt.
 
 Environment:
 
@@ -52,25 +72,37 @@ Under **Advanced → Swarm settings**, set the update config to
 
 ## 4. Web application
 
-A second **Application** from the same repository:
+A second **Application** from the same repository. The Provider panel is filled
+in exactly as in step 3 — same repo, branch `master`, Build Path `/` — with the
+watch paths, if you set any, pointing at `apps/web/**` instead of
+`apps/server/**`.
 
-| Setting             | Value                                                               |
-| ------------------- | ------------------------------------------------------------------- |
-| Build type          | `Dockerfile`                                                        |
-| Dockerfile path     | `apps/web/Dockerfile`                                               |
-| Docker context path | `.`                                                                 |
-| Domain              | `play.example.com` → container port **3000**, HTTPS + Let's Encrypt |
+**Build Type** panel:
 
-**Build-time argument** (not an environment variable):
+| Field               | Value                                              |
+| ------------------- | -------------------------------------------------- |
+| Build Type          | Dockerfile                                         |
+| Docker File         | `apps/web/Dockerfile`                              |
+| Docker Context Path | empty — the default `.` is the repo root           |
+| Docker Build Stage  | empty — `runner` is already the last stage         |
 
-| Argument                 | Value                     |
+**Domain**: `play.example.com` → container port **3000**, HTTPS + Let's Encrypt.
+
+**Build-time value**, set under **Environment**:
+
+| Variable                 | Value                     |
 | ------------------------ | ------------------------- |
 | `NEXT_PUBLIC_SERVER_URL` | `https://api.example.com` |
 
+Dokploy forwards an application's environment variables to `docker build` as
+build arguments, which is what makes this work; the Dockerfile declares the
+matching `ARG`. If a build still reports the variable as missing, look for
+**Build Args** under Advanced and set it there as well.
+
 `NEXT_PUBLIC_*` values are inlined into the bundle during `next build`, so this
-has to be present at build time; setting it as a runtime variable does nothing.
-Changing it later means a rebuild, not a restart. A build without it fails
-deliberately — the alternative was a bundle silently pointing at
+has to be present at build time; a value that only exists at run time does
+nothing. Changing it later means a rebuild, not a restart. A build without it
+fails deliberately — the alternative was a bundle silently pointing at
 `localhost:3001`, which works for whoever built it and for nobody else.
 
 The client derives the WebSocket URL from the same value, so `https://` becomes
