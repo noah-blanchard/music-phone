@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ServerMessage, ServerMessageType } from "@musicphone/shared";
+import type { Room, ServerMessage, ServerMessageType } from "@musicphone/shared";
 import { EMPTY_ROOM_TTL_MS, LEAVE_GRACE_MS, type ReducerContext } from "../game/reducer";
 import { ConnectionRegistry } from "./connections";
 import { LocalScheduler } from "./scheduler/local-scheduler";
@@ -458,6 +458,97 @@ describe("catching up after a reconnect", () => {
 
     expect(back.ofType("game:finished")).toHaveLength(1);
     expect(back.ofType("room:snapshot").at(-1)!.room.melodies).toHaveLength(2);
+  });
+});
+
+/* --------------------------------- reveal --------------------------------- */
+
+/**
+ * Whoever the reveal rule currently puts in charge: the active song's author if
+ * they are here, else the host, else anyone still connected.
+ */
+function whoDrives(room: Room, sockets: Socket[]): string {
+  const here = (id: string | undefined) =>
+    id !== undefined && room.players.some((p) => p.id === id && p.connected);
+
+  const presenter = room.melodies[room.reveal.activeSong]?.seedPlayerId;
+  if (here(presenter)) return presenter!;
+  if (here(room.hostId)) return room.hostId;
+
+  const anyone = sockets.find((s) => room.players.some((p) => p.id === s.playerId && p.connected));
+  if (!anyone) throw new Error("nobody left who could drive the reveal");
+  return anyone.playerId;
+}
+
+describe("the results reveal", () => {
+  it("keeps going when the presenting player disappears", async () => {
+    const { code, sockets } = await startedGame(3);
+    for (let round = 0; round < 3; round++) {
+      for (const socket of sockets) {
+        await service.dispatch(code, { type: "turn:submit", playerId: socket.playerId, notes: [] });
+      }
+    }
+
+    const room = await service.get(code);
+    const presenterId = room!.melodies[0]!.seedPlayerId;
+    const presenter = sockets.find((s) => s.playerId === presenterId)!;
+    const others = sockets.filter((s) => s.playerId !== presenterId);
+
+    // The author of song 1 closes their tab mid-presentation.
+    await disconnect(presenter);
+
+    // Someone else must still be able to reveal and advance. Before the
+    // fallback existed this froze the results screen for everyone, forever.
+    const driver = others[0]!;
+    await service.dispatch(code, {
+      type: "reveal:update",
+      playerId: driver.playerId,
+      activeSong: 0,
+      revealedLayers: 2,
+      playing: true,
+    });
+    expect((await service.get(code))!.reveal.revealedLayers).toBe(2);
+
+    // ...and the reveal can still be driven all the way to the end. Control
+    // returns to each song's own author as it comes up, so the driver changes.
+    for (let song = 0; song < 3; song++) {
+      const current = (await service.get(code))!;
+      const inCharge = whoDrives(current, sockets);
+      await service.dispatch(code, {
+        type: "reveal:update",
+        playerId: inCharge,
+        activeSong: current.reveal.activeSong + 1,
+        revealedLayers: 0,
+        playing: false,
+      });
+    }
+    expect((await service.get(code))!.reveal.done).toBe(true);
+  });
+
+  it("tells each player whether they may drive", async () => {
+    const { code, sockets } = await startedGame(2);
+    for (let round = 0; round < 2; round++) {
+      for (const socket of sockets) {
+        await service.dispatch(code, { type: "turn:submit", playerId: socket.playerId, notes: [] });
+      }
+    }
+
+    const room = await service.get(code);
+    const presenterId = room!.melodies[0]!.seedPlayerId;
+    const hostId = room!.hostId;
+
+    for (const socket of sockets) {
+      const snapshot = socket.ofType("room:snapshot").at(-1)!;
+      const shouldControl = socket.playerId === presenterId || socket.playerId === hostId;
+      expect(snapshot.room.canControlReveal).toBe(shouldControl);
+    }
+  });
+
+  it("never says a lobby player may drive a reveal", async () => {
+    const { sockets } = await lobby(2);
+    for (const socket of sockets) {
+      expect(socket.ofType("room:snapshot").at(-1)!.room.canControlReveal).toBe(false);
+    }
   });
 });
 

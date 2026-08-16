@@ -5,6 +5,7 @@ import {
   MIN_PLAYERS,
   SCALE_CHOICES,
   assignWheel,
+  canControlReveal,
   getMode,
   getRole,
   sanitizeConfig,
@@ -354,8 +355,17 @@ export function reduce(room: Room, command: Command, ctx: ReducerContext): Reduc
       if (next.phase !== "results" || next.reveal.done) return { room, effects: [] };
 
       const current = next.reveal.activeSong;
-      // Only the song's own author drives its reveal.
-      if (next.melodies[current]?.seedPlayerId !== command.playerId) return { room, effects: [] };
+      // Normally the song's own author drives its reveal, but control falls back
+      // to the host and then to anyone present, so a departed presenter cannot
+      // strand the results screen (see canControlReveal).
+      const allowed = canControlReveal(
+        next.reveal,
+        next.players,
+        next.hostId,
+        next.melodies[current]?.seedPlayerId,
+        command.playerId,
+      );
+      if (!allowed) return { room, effects: [] };
 
       if (command.activeSong === current) {
         const max = next.melodies[current]?.segments.length ?? 0;

@@ -56,6 +56,9 @@ export function ResultsPlayer({ melodies, config, roomCode }: Props) {
 function SequentialReveal({ melodies, config }: { melodies: Melody[]; config: GameConfig }) {
   const reveal = useGameStore((s) => s.snapshot?.reveal);
   const selfId = useGameStore((s) => s.snapshot?.selfId);
+  // The server decides who may drive: normally the song's author, falling back
+  // to the host and then to anyone present if they have gone.
+  const canControl = useGameStore((s) => s.snapshot?.canControlReveal ?? false);
   const setReveal = useGameStore((s) => s.setReveal);
 
   const activeSong = reveal?.activeSong ?? 0;
@@ -98,6 +101,7 @@ function SequentialReveal({ melodies, config }: { melodies: Melody[]; config: Ga
         last={activeSong === melodies.length - 1}
         config={config}
         selfId={selfId}
+        canControl={canControl}
         revealed={revealed}
         playing={playing}
         setReveal={setReveal}
@@ -112,6 +116,7 @@ function ActiveSong({
   last,
   config,
   selfId,
+  canControl,
   revealed,
   playing,
   setReveal,
@@ -121,6 +126,8 @@ function ActiveSong({
   last: boolean;
   config: GameConfig;
   selfId: string | undefined;
+  /** Whether this player may drive the reveal, as decided by the server. */
+  canControl: boolean;
   revealed: number;
   playing: boolean;
   setReveal: (activeSong: number, revealedLayers: number, playing: boolean) => void;
@@ -183,6 +190,11 @@ function ActiveSong({
           <span className="chip" style={{ marginLeft: "auto" }}>
             you present
           </span>
+        ) : canControl ? (
+          // The author has left, so someone else is keeping things moving.
+          <span className="chip" style={{ marginLeft: "auto" }}>
+            you have the controls
+          </span>
         ) : (
           <span className="chip" style={{ marginLeft: "auto" }}>
             {playing ? "● live" : "○ paused"}
@@ -190,7 +202,7 @@ function ActiveSong({
         )}
       </div>
 
-      {isPresenter && (
+      {canControl && (
         <div className="row" style={{ gap: 8, marginTop: 8 }}>
           <button
             className="hw-btn hw-icon hw-btn--primary"

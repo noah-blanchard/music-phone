@@ -178,6 +178,12 @@ export interface RoomSnapshot {
   wheelOffsetDeg: number;
   /** Room-wide guided-reveal cursor (results phase only). */
   reveal: RevealState;
+  /**
+   * Whether this player may currently drive the reveal. Computed server-side
+   * (see `canControlReveal`) so the client never has to re-derive the rule and
+   * risk disagreeing about it.
+   */
+  canControlReveal: boolean;
 }
 
 /**
