@@ -37,6 +37,11 @@ export function TransportControls({ bpm, totalSteps, layers, onStep }: Props) {
     handleRef.current = playLayers(layers, bpm, totalSteps, {
       onStep: (s) => onStep?.(s),
       onEnd: stop,
+      onStopped: () => {
+        handleRef.current = null;
+        setPlaying(false);
+        onStep?.(null);
+      },
     });
   };
 

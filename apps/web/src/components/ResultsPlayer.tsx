@@ -152,6 +152,10 @@ function ActiveSong({
       handleRef.current = playLayers(layers, song.bpm, loopLength(config), {
         loop: true,
         onStep: setStep,
+        onStopped: () => {
+          handleRef.current = null;
+          setStep(null);
+        },
       });
     })();
     return () => {
@@ -279,7 +283,15 @@ function FreeSong({ song, index, config }: { song: Melody; index: number; config
     uiClick();
     if (playing) return stop();
     setPlaying(true);
-    handleRef.current = playLayers(stackLayers(song), song.bpm, loopLength(config), { loop: true });
+    // Starting this song stops any other, so the one that loses the transport
+    // has to hear about it — otherwise its button sits on "■" playing nothing.
+    handleRef.current = playLayers(stackLayers(song), song.bpm, loopLength(config), {
+      loop: true,
+      onStopped: () => {
+        handleRef.current = null;
+        setPlaying(false);
+      },
+    });
   };
   useEffect(() => () => handleRef.current?.stop(), []);
 
