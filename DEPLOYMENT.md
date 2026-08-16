@@ -85,13 +85,18 @@ repo root, so a narrower context fails on the first `COPY`.
 
 **Domain**: `api.example.com` → container port **3001**, HTTPS + Let's Encrypt.
 
-Environment:
+**Environment** tab, in the upper `Environment Settings` box:
 
 | Variable     | Value                                                 |
 | ------------ | ----------------------------------------------------- |
 | `WEB_ORIGIN` | `https://play.example.com` — exact, no trailing slash |
 | `REDIS_URL`  | the internal URL from step 2                          |
 | `PORT`       | `3001`                                                |
+
+The server declares no `ARG` and reads all three at startup, so it needs nothing
+in the `Build Time Arguments` box below — unlike the web app, where the opposite
+is true. Anything put there instead would be consumed by a build that does not
+want it and would never reach the container.
 
 `WEB_ORIGIN` is not optional in spirit: left unset the server allows **any**
 origin and says so at startup. It is what the WebSocket upgrade is checked
@@ -119,18 +124,23 @@ watch paths, if you set any, pointing at `apps/web/**` instead of
 
 **Domain**: `play.example.com` → container port **3000**, HTTPS + Let's Encrypt.
 
-**Build-time value.** In the **Environment** tab, scroll past the environment
-variables to the separate **Build-Time Arguments** box and put it there:
+**Build-time value.** The **Environment** tab holds two separate boxes once the
+build type is Dockerfile: `Environment Settings` at the top, and
+`Build Time Arguments` below it. This goes in the **lower** one:
 
 ```
 NEXT_PUBLIC_SERVER_URL=https://api.example.com
 ```
 
 This is the single easiest thing to get wrong, so it is worth being blunt about:
-Dokploy passes **only** Build-Time Arguments to a Dockerfile build. The same
-name typed into the environment variables above it reaches the container at run
-time — long after `next build` has inlined `NEXT_PUBLIC_*` values into the
-JavaScript — and the build stops with `NEXT_PUBLIC_SERVER_URL is empty`.
+Dokploy passes **only** Build Time Arguments to `docker build`. The same line
+typed into `Environment Settings` reaches the container at run time — long after
+`next build` inlined every `NEXT_PUBLIC_*` value into the JavaScript — and the
+build dies part-way through prerendering with
+
+```
+Error: NEXT_PUBLIC_SERVER_URL is not set. Point it at the game server before building for production.
+```
 
 Changing the value later means a rebuild, not a restart. The build refusing to
 proceed is deliberate: the alternative was a bundle silently pointing at
