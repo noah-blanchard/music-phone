@@ -3,11 +3,13 @@ import {
   KEY_CHOICES,
   LAYER_ROLES,
   MIN_PLAYERS,
+  REROLLS_PER_ROUND,
   SCALE_CHOICES,
   assignWheel,
   canControlReveal,
   getMode,
   getRole,
+  roleDefaultSound,
   sanitizeConfig,
   type Melody,
   type Role,
@@ -87,31 +89,59 @@ function acceptedInstrument(role: Role, instrumentId: string | undefined): strin
 function turnOf(room: Room, playerId: string): TurnState {
   const existing = room.turns[playerId];
   if (existing) return existing;
-  const created: TurnState = { draft: [] };
+  const created: TurnState = { draft: [], rerollsLeft: 0 };
   room.turns[playerId] = created;
   return created;
 }
 
-/** Build the `round:started` payload for one player. */
-export function roundStartedMessage(room: Room, playerIndex: number): ServerMessage {
+/**
+ * Build the `round:started` payload for one player.
+ *
+ * `resumed` marks a reconnecting player being handed a round already under way,
+ * as opposed to a round genuinely starting. It carries their autosaved draft
+ * and rolled sound either way, so coming back restores their work rather than
+ * dropping it.
+ */
+export function roundStartedMessage(
+  room: Room,
+  playerIndex: number,
+  resumed = false,
+): ServerMessage {
   const mode = getMode(room.config.mode);
   const player = room.players[playerIndex]!;
   const song = room.melodies[mode.assign(playerIndex, room.round, room.players.length)]!;
+  const role = roleOf(room, player.id);
+  const turn = room.turns[player.id];
+
   return {
     type: "round:started",
     round: room.round,
     contextLayers: mode.buildContext(song, room.round, room.config),
-    role: roleOf(room, player.id),
+    role,
     song: { bpm: song.bpm, root: song.root, scale: song.scale },
     isFirstLayer: song.segments.length === 0,
     endsAt: room.roundEndsAt,
+    draft: turn?.draft ?? [],
+    instrumentId: turn?.instrumentId ?? roleDefaultSound(role),
+    rerollsLeft: turn?.rerollsLeft ?? 0,
+    resumed,
   };
 }
 
 /** Reset per-round state, arm the clock and push everyone their turn. */
 function beginRound(room: Room, ctx: ReducerContext): Effect[] {
   room.ready = {};
+  // Roll each player's sound here rather than letting their client pick one.
+  // It then survives a reconnect, is identical for everyone, and cannot be a
+  // sound the player's kit does not offer.
   room.turns = {};
+  for (const player of room.players) {
+    room.turns[player.id] = {
+      draft: [],
+      instrumentId: pick(roleOf(room, player.id).instruments, ctx.random),
+      rerollsLeft: REROLLS_PER_ROUND,
+    };
+  }
   room.roundEndsAt = ctx.now + room.config.roundDurationSec * 1000;
 
   return [
@@ -324,6 +354,8 @@ export function reduce(room: Room, command: Command, ctx: ReducerContext): Reduc
       const sound = acceptedInstrument(role, command.instrumentId);
       const turn = turnOf(next, command.playerId);
       turn.draft = clean;
+      // The server owns the sound now; a client may still echo it back, and it
+      // is honoured only if it names something this kit actually offers.
       if (sound) turn.instrumentId = sound;
       // Deliberately silent: autosave fires on every edit and must not put a
       // snapshot on the wire for each keystroke.
@@ -341,6 +373,34 @@ export function reduce(room: Room, command: Command, ctx: ReducerContext): Reduc
       if (sound) turn.instrumentId = sound;
       next.ready[command.playerId] = true;
       return { room: next, effects: [{ type: "snapshot" }, ...maybeAdvance(next, ctx)] };
+    }
+
+    case "turn:reroll": {
+      if (next.phase !== "playing") return { room, effects: [] };
+      const turn = next.turns[command.playerId];
+      if (!turn || turn.rerollsLeft <= 0) return { room, effects: [] };
+
+      // Prefer a sound they do not already have, so a re-roll always sounds
+      // like something happened.
+      const pool = roleOf(next, command.playerId).instruments;
+      const alternatives = pool.filter((id) => id !== turn.instrumentId);
+      turn.instrumentId = pick(alternatives.length > 0 ? alternatives : pool, ctx.random);
+      turn.rerollsLeft -= 1;
+
+      return {
+        room: next,
+        effects: [
+          {
+            type: "send",
+            playerId: command.playerId,
+            message: {
+              type: "turn:state",
+              instrumentId: turn.instrumentId,
+              rerollsLeft: turn.rerollsLeft,
+            },
+          },
+        ],
+      };
     }
 
     case "player:ready": {

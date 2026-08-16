@@ -4,6 +4,7 @@ import {
   LAYER_ROLES,
   MAX_PLAYERS,
   MIN_PLAYERS,
+  REROLLS_PER_ROUND,
   getRole,
   type Note,
   type Room,
@@ -651,6 +652,83 @@ describe("player:ready", () => {
   });
 });
 
+describe("turn:reroll", () => {
+  it("swaps the sound for another from the same kit and spends the re-roll", () => {
+    const room = startedGame(3);
+    const player = room.players[0]!;
+    const before = room.turns[player.id]!.instrumentId;
+
+    const result = reduce(room, { type: "turn:reroll", playerId: player.id }, ctx);
+    const turn = result.room.turns[player.id]!;
+
+    expect(turn.rerollsLeft).toBe(REROLLS_PER_ROUND - 1);
+    expect(getRole(room.assignments[player.id])!.instruments).toContain(turn.instrumentId);
+    expect(turn.instrumentId).not.toBe(before);
+  });
+
+  it("tells only that player about it", () => {
+    const room = startedGame(3);
+    const player = room.players[0]!;
+    const result = reduce(room, { type: "turn:reroll", playerId: player.id }, ctx);
+
+    expect(result.effects).toHaveLength(1);
+    const sent = findEffect(result, "send")!;
+    expect(sent.playerId).toBe(player.id);
+    expect(sent.message.type).toBe("turn:state");
+  });
+
+  it("refuses once the budget is spent", () => {
+    let room = startedGame(3);
+    const player = room.players[0]!;
+    room = reduce(room, { type: "turn:reroll", playerId: player.id }, ctx).room;
+
+    const spent = reduce(room, { type: "turn:reroll", playerId: player.id }, ctx);
+    expect(spent.effects).toEqual([]);
+    expect(spent.room.turns[player.id]!.rerollsLeft).toBe(0);
+  });
+
+  it("leaves a single-sound kit on the sound it has", () => {
+    // Some kits list only one instrument; a re-roll must not blank it.
+    const room = startedGame(3);
+    const player = room.players.find(
+      (p) => getRole(room.assignments[p.id])!.instruments.length === 1,
+    );
+    if (!player) return; // no single-sound kit dealt this seed
+
+    const result = reduce(room, { type: "turn:reroll", playerId: player.id }, ctx);
+    expect(result.room.turns[player.id]!.instrumentId).toBe(
+      getRole(room.assignments[player.id])!.instruments[0],
+    );
+  });
+
+  it("is ignored outside the playing phase", () => {
+    const room = lobbyOf(2);
+    const result = reduce(room, { type: "turn:reroll", playerId: room.players[0]!.id }, ctx);
+    expect(result.effects).toEqual([]);
+  });
+});
+
+describe("the sound rolled at the start of a round", () => {
+  it("comes from the kit that player was dealt", () => {
+    for (let n = MIN_PLAYERS; n <= MAX_PLAYERS; n++) {
+      const room = startedGame(n);
+      for (const player of room.players) {
+        const turn = room.turns[player.id]!;
+        expect(getRole(room.assignments[player.id])!.instruments, `n=${n}`).toContain(
+          turn.instrumentId,
+        );
+      }
+    }
+  });
+
+  it("gives everyone a full re-roll budget", () => {
+    const room = startedGame(4);
+    for (const player of room.players) {
+      expect(room.turns[player.id]!.rerollsLeft).toBe(REROLLS_PER_ROUND);
+    }
+  });
+});
+
 /* --------------------------------- rounds --------------------------------- */
 
 describe("round:timeout", () => {
@@ -736,9 +814,18 @@ describe("round:timeout", () => {
     ).room;
 
     const after = reduce(room, { type: "round:timeout", round: 0 }, ctx).room;
-    expect(after.turns).toEqual({});
     expect(after.ready).toEqual({});
     expect(after.roundEndsAt).toBe(NOW + DEFAULT_CONFIG.roundDurationSec * 1000);
+
+    // Everyone starts the new round with nothing drafted, a freshly rolled
+    // sound from their own kit, and their re-roll back.
+    for (const player of after.players) {
+      const turn = after.turns[player.id]!;
+      expect(turn.draft).toEqual([]);
+      expect(turn.submitted).toBeUndefined();
+      expect(turn.rerollsLeft).toBe(REROLLS_PER_ROUND);
+      expect(getRole(after.assignments[player.id])!.instruments).toContain(turn.instrumentId);
+    }
   });
 });
 

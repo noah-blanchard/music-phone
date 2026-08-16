@@ -43,6 +43,11 @@ export interface MsgLeave {
   type: "room:leave";
 }
 
+/** Ask for a different sound from the dealt kit's pool. Limited per round. */
+export interface MsgReroll {
+  type: "turn:reroll";
+}
+
 /**
  * Results-phase reveal control. Only accepted from the active song's seed player
  * (its author). Setting `activeSong` to the next index advances the room-wide
@@ -61,6 +66,7 @@ export type ClientMessage =
   | MsgAutosave
   | MsgSubmit
   | MsgReady
+  | MsgReroll
   | MsgReveal
   | MsgLeave;
 
@@ -86,6 +92,26 @@ export interface MsgRoundStarted {
   isFirstLayer: boolean;
   /** Epoch milliseconds at which this round auto-advances. */
   endsAt: number;
+  /** The player's current work: their autosaved draft, empty on a fresh round. */
+  draft: Note[];
+  /** The sound rolled for this layer by the server. */
+  instrumentId: string;
+  /** Re-rolls of that sound still available this round. */
+  rerollsLeft: number;
+  /**
+   * True when this is a reconnecting player being handed back a round already
+   * in progress, rather than a new round starting. The client uses it to
+   * restore their work instead of clearing it, and to skip replaying the round
+   * intro they have already watched.
+   */
+  resumed: boolean;
+}
+
+/** A change to the local player's turn that did not start a round. */
+export interface MsgTurnState {
+  type: "turn:state";
+  instrumentId: string;
+  rerollsLeft: number;
 }
 
 export interface MsgRoundEnded {
@@ -107,6 +133,7 @@ export interface MsgError {
 export type ServerMessage =
   | MsgSnapshot
   | MsgRoundStarted
+  | MsgTurnState
   | MsgRoundEnded
   | MsgGameFinished
   | MsgError;

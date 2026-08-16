@@ -220,7 +220,9 @@ export class RoomService {
           break;
 
         case "announce-round-to": {
-          const message = this.roundMessage(room, effect.playerId);
+          // A single recipient is always someone catching up on a round that is
+          // already running, so their client restores rather than resets.
+          const message = this.roundMessage(room, effect.playerId, true);
           if (message) this.bus.sendToPlayer(room.code, effect.playerId, message);
           break;
         }
@@ -244,9 +246,9 @@ export class RoomService {
   }
 
   /** A player's `round:started`, or undefined if they are not in this room. */
-  private roundMessage(room: Room, playerId: string): ServerMessage | undefined {
+  private roundMessage(room: Room, playerId: string, resumed = false): ServerMessage | undefined {
     const index = room.players.findIndex((p) => p.id === playerId);
-    return index >= 0 ? roundStartedMessage(room, index) : undefined;
+    return index >= 0 ? roundStartedMessage(room, index, resumed) : undefined;
   }
 
   /* --------------------------------- queue -------------------------------- */

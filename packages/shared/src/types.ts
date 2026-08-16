@@ -84,9 +84,18 @@ export interface TurnState {
   draft: Note[];
   /** Notes explicitly submitted. Takes precedence over `draft` when committing. */
   submitted?: Note[];
-  /** The sound chosen for this layer: an instrument id, or a kit id for drums. */
+  /**
+   * The sound for this layer: an instrument id, or a kit id for drums. Rolled
+   * by the server when the round begins so it survives a reconnect and every
+   * client agrees on it.
+   */
   instrumentId?: string;
+  /** Re-rolls of that sound still available this round. */
+  rerollsLeft: number;
 }
+
+/** How many times a player may re-roll their sound within a round. */
+export const REROLLS_PER_ROUND = 1;
 
 export type Phase = "lobby" | "playing" | "results";
 

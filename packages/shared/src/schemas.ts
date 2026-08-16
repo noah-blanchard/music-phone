@@ -32,6 +32,7 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
   switch (raw.type) {
     case "game:start":
     case "room:leave":
+    case "turn:reroll":
       return { type: raw.type };
     case "player:ready":
       return typeof raw.ready === "boolean" ? { type: "player:ready", ready: raw.ready } : null;

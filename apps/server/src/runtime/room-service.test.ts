@@ -463,6 +463,81 @@ describe("catching up after a reconnect", () => {
     expect(started[0]!.round).toBe(0);
   });
 
+  /* ------------------------------------------------------------------ *
+   * C2: a blip used to cost the player their bars and change their      *
+   * instrument, because round:started always meant "start from scratch".*
+   * ------------------------------------------------------------------ */
+
+  it("hands back the notes the player had drafted", async () => {
+    const { code, sockets } = await startedGame(2);
+    const player = sockets[1]!;
+    const room = await service.get(code);
+    const notes = [
+      getRole(room!.assignments[player.playerId])!.editor === "drum-grid"
+        ? { pitch: 2, start: 8, length: 1 }
+        : { pitch: 64, start: 8, length: 4 },
+    ];
+
+    await service.dispatch(code, { type: "turn:autosave", playerId: player.playerId, notes });
+
+    await disconnect(player);
+    const back = await connect(code, player.playerId, "s-back");
+
+    const started = back.ofType("round:started")[0]!;
+    expect(started.draft).toEqual(notes);
+    expect(started.resumed).toBe(true);
+  });
+
+  it("keeps the same sound across the reconnect", async () => {
+    const { code, sockets } = await startedGame(2);
+    const player = sockets[1]!;
+    const before = (await service.get(code))!.turns[player.playerId]!.instrumentId;
+
+    await disconnect(player);
+    const back = await connect(code, player.playerId, "s-back");
+
+    expect(back.ofType("round:started")[0]!.instrumentId).toBe(before);
+  });
+
+  it("does not restore a re-roll that was already spent", async () => {
+    const { code, sockets } = await startedGame(2);
+    const player = sockets[1]!;
+    await service.dispatch(code, { type: "turn:reroll", playerId: player.playerId });
+
+    await disconnect(player);
+    const back = await connect(code, player.playerId, "s-back");
+
+    expect(back.ofType("round:started")[0]!.rerollsLeft).toBe(0);
+  });
+
+  it("marks a genuinely new round as not resumed, so the intro plays once", async () => {
+    const { code, sockets } = await startedGame(3);
+    for (const socket of sockets) {
+      expect(socket.ofType("round:started")[0]!.resumed).toBe(false);
+    }
+
+    // The next round is also new, not a resume.
+    for (const socket of sockets) socket.clear();
+    for (const socket of sockets) {
+      await service.dispatch(code, { type: "turn:submit", playerId: socket.playerId, notes: [] });
+    }
+    for (const socket of sockets) {
+      expect(socket.ofType("round:started")[0]!.resumed).toBe(false);
+    }
+  });
+
+  it("remembers that the player had already submitted", async () => {
+    const { code, sockets } = await startedGame(3);
+    const player = sockets[0]!;
+    await service.dispatch(code, { type: "turn:submit", playerId: player.playerId, notes: [] });
+
+    await disconnect(player);
+    const back = await connect(code, player.playerId, "s-back");
+
+    // The client reads submitted-ness off the snapshot, so it must survive.
+    expect(back.ofType("room:snapshot").at(-1)!.room.ready[player.playerId]).toBe(true);
+  });
+
   it("hands the finished songs to a player who comes back during results", async () => {
     const { code, sockets } = await startedGame(2);
     for (let round = 0; round < 2; round++) {

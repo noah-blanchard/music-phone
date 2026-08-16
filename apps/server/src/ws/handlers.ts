@@ -45,6 +45,8 @@ export function toCommand(raw: unknown, playerId: string): Command | null {
       };
     case "player:ready":
       return { type: "player:ready", playerId, ready: message.ready };
+    case "turn:reroll":
+      return { type: "turn:reroll", playerId };
     case "reveal:update":
       return {
         type: "reveal:update",

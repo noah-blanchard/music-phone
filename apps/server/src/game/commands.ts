@@ -23,6 +23,7 @@ export type Command =
   | { type: "turn:autosave"; playerId: string; notes: unknown; instrumentId?: string }
   | { type: "turn:submit"; playerId: string; notes: unknown; instrumentId?: string }
   | { type: "player:ready"; playerId: string; ready: boolean }
+  | { type: "turn:reroll"; playerId: string }
   | {
       type: "reveal:update";
       playerId: string;
