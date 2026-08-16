@@ -1,0 +1,45 @@
+# Runs the two production images plus Redis on your machine, so a broken image
+# is caught before Dokploy builds it. This is NOT how the app is deployed —
+# Dokploy runs the web and server as two separate Applications against its own
+# managed Redis (see DEPLOYMENT.md).
+#
+#   docker compose -f docker-compose.local.yml up --build
+#   → http://localhost:3000
+
+services:
+  redis:
+    image: redis:7-alpine
+    # Rooms carry their own TTL; evicting them early would drop live games.
+    command: redis-server --maxmemory-policy noeviction
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  server:
+    build:
+      context: .
+      dockerfile: apps/server/Dockerfile
+    environment:
+      PORT: 3001
+      WEB_ORIGIN: http://localhost:3000
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "3001:3001"
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        # Baked into the client bundle, so it is the URL the *browser* uses —
+        # localhost, not the compose service name.
+        NEXT_PUBLIC_SERVER_URL: http://localhost:3001
+    ports:
+      - "3000:3000"
+    depends_on:
+      - server

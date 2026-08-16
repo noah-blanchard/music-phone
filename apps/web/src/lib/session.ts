@@ -1,8 +1,9 @@
 /**
- * Anonymous session persistence. Because the Vercel client and the Render server
- * live on different origins, we keep the per-room playerId in localStorage rather
- * than an httpOnly cookie — simpler and reliable across origins for an ephemeral
- * game. The playerId acts as the reconnect token (passed on the WS query string).
+ * Anonymous session persistence. The client and the game server live on
+ * different origins (their own subdomains), so we keep the per-room playerId in
+ * localStorage rather than an httpOnly cookie — simpler and reliable across
+ * origins for an ephemeral game. The playerId acts as the reconnect token
+ * (passed on the WS query string).
  */
 
 const credKey = (code: string) => `mp:player:${code.toUpperCase()}`;
