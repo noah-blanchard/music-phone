@@ -13,6 +13,23 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
+
+    # The RoomStore contract suite runs against both implementations. Without a
+    # real Redis the Redis half silently skips, so CI provides one.
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      REDIS_TEST_URL: redis://localhost:6379
+
     steps:
       - uses: actions/checkout@v4
 
@@ -34,3 +51,12 @@ jobs:
 
       - name: Test
         run: bun run test
+
+      # The Redis half of the store contract is the point of the service above;
+      # if it skipped, the service is misconfigured and CI should say so.
+      - name: Confirm the Redis store suite actually ran
+        run: |
+          if bun run test 2>&1 | grep -qi "RedisRoomStore.*skipped"; then
+            echo "::error::RedisRoomStore tests were skipped — REDIS_TEST_URL is not reaching Redis"
+            exit 1
+          fi

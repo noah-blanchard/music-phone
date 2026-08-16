@@ -2,7 +2,7 @@ import type { GameConfig, Room, ServerMessage } from "@musicphone/shared";
 import type { Command } from "../game/commands";
 import type { Effect } from "../game/effects";
 import { createRoom, joinRoom, randomCode } from "../game/create";
-import { REAP_TIMER } from "../game/effects";
+import { REAP_TIMER, ROUND_TIMER } from "../game/effects";
 import {
   EMPTY_ROOM_TTL_MS,
   reduce,
@@ -105,6 +105,64 @@ export class RoomService {
 
   async get(code: string): Promise<Room | undefined> {
     return (await this.store.load(code))?.room;
+  }
+
+  /* -------------------------------- startup ------------------------------- */
+
+  /**
+   * Re-arm timers for rooms that outlived the process.
+   *
+   * Round deadlines are stored as absolute times, so a round interrupted by a
+   * restart resumes and ends when it was always going to end. A deadline that
+   * passed while the server was down fires immediately, which is the right
+   * outcome: that round is over.
+   *
+   * Rooms with nobody in them get a reaper instead, so a restart does not leave
+   * abandoned games waiting on the storage TTL.
+   *
+   * Returns how many rooms were restored, for the startup log.
+   */
+  async restoreTimers(): Promise<number> {
+    const codes = await this.store.codes();
+    let restored = 0;
+
+    for (const code of codes) {
+      const loaded = await this.store.load(code);
+      if (!loaded) continue;
+      const { room } = loaded;
+
+      if (room.phase === "playing") {
+        this.scheduler.schedule(code, ROUND_TIMER, room.roundEndsAt, () => {
+          void this.dispatch(code, { type: "round:timeout", round: room.round });
+        });
+        restored++;
+      }
+
+      // Nobody can still be connected — every socket died with the process.
+      this.scheduler.schedule(code, REAP_TIMER, this.context().now + EMPTY_ROOM_TTL_MS, () => {
+        void this.dispatch(code, { type: "room:reap" });
+      });
+    }
+
+    return restored;
+  }
+
+  /**
+   * Mark everyone as disconnected. Called at boot: the stored rooms remember
+   * whoever was connected to the previous process, and those sockets are gone.
+   */
+  async clearStalePresence(): Promise<void> {
+    for (const code of await this.store.codes()) {
+      await this.enqueue(code, async () => {
+        const loaded = await this.store.load(code);
+        if (!loaded) return;
+        if (!loaded.room.players.some((p) => p.connected)) return;
+
+        const room = structuredClone(loaded.room);
+        for (const player of room.players) player.connected = false;
+        await this.store.save(room, loaded.version);
+      });
+    }
   }
 
   /* ------------------------------ dispatching ----------------------------- */

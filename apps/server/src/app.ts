@@ -1,9 +1,12 @@
 import { Elysia, t } from "elysia";
 import { cors } from "@elysiajs/cors";
+import { Redis } from "ioredis";
 import type { ServerConfig } from "./config";
 import { ConnectionRegistry } from "./runtime/connections";
 import { LocalScheduler } from "./runtime/scheduler/local-scheduler";
 import { MemoryRoomStore } from "./runtime/store/memory-store";
+import { RedisRoomStore } from "./runtime/store/redis-store";
+import type { RoomStore } from "./runtime/store/types";
 import { RoomService } from "./runtime/room-service";
 import { RateLimiter, clientKey } from "./runtime/rate-limit";
 import { toCommand } from "./ws/handlers";
@@ -12,6 +15,8 @@ export interface AppParts {
   service: RoomService;
   connections: ConnectionRegistry;
   scheduler: LocalScheduler;
+  /** Present only when REDIS_URL is configured; closed on shutdown. */
+  redis?: Redis;
 }
 
 /**
@@ -43,11 +48,23 @@ const PRUNE_INTERVAL_MS = 5 * 60_000;
 export function buildApp(config: ServerConfig) {
   const connections = new ConnectionRegistry();
   const scheduler = new LocalScheduler();
-  const service = new RoomService({
-    store: new MemoryRoomStore(),
-    bus: connections,
-    scheduler,
-  });
+
+  let redis: Redis | undefined;
+  let store: RoomStore;
+  if (config.redisUrl) {
+    redis = new Redis(config.redisUrl, {
+      // Fail commands fast rather than queueing them forever if Redis is down;
+      // a request that cannot be served should say so, not hang.
+      maxRetriesPerRequest: 3,
+      lazyConnect: false,
+    });
+    redis.on("error", (error) => console.error("[redis]", error.message));
+    store = new RedisRoomStore(redis);
+  } else {
+    store = new MemoryRoomStore();
+  }
+
+  const service = new RoomService({ store, bus: connections, scheduler });
 
   const createLimiter = new RateLimiter(CREATE_LIMIT);
   const joinLimiter = new RateLimiter(JOIN_LIMIT);
@@ -191,7 +208,7 @@ export function buildApp(config: ServerConfig) {
       },
     });
 
-  return { app, parts: { service, connections, scheduler } satisfies AppParts };
+  return { app, parts: { service, connections, scheduler, redis } satisfies AppParts };
 }
 
 /** Exported for the typed Eden client in the web app. */

@@ -4,6 +4,11 @@ export interface ServerConfig {
   webOrigin: string;
   /** True when `webOrigin` is "*" — convenient, and never right in production. */
   allowAnyOrigin: boolean;
+  /**
+   * Redis connection string. When absent, rooms are held in memory only and do
+   * not survive a restart — fine for local development, not for production.
+   */
+  redisUrl?: string;
 }
 
 export function loadConfig(env: Record<string, string | undefined> = process.env): ServerConfig {
@@ -17,5 +22,10 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     throw new Error(`PORT must be a valid port number, got ${JSON.stringify(rawPort)}`);
   }
 
-  return { port, webOrigin, allowAnyOrigin: webOrigin === "*" };
+  const redisUrl = env.REDIS_URL?.trim() || undefined;
+  if (redisUrl && !/^rediss?:\/\//.test(redisUrl)) {
+    throw new Error("REDIS_URL must start with redis:// or rediss://");
+  }
+
+  return { port, webOrigin, allowAnyOrigin: webOrigin === "*", redisUrl };
 }
