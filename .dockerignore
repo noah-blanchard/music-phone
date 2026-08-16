@@ -1,13 +1,15 @@
+# Both images build from this one context — the server from
+# apps/server/Dockerfile, the web app from apps/web/Dockerfile — so every
+# workspace's source has to reach it. Only what a build reproduces is excluded.
 node_modules
 **/node_modules
-# The web app is deployed on Vercel; only its manifest is needed here, so that
-# `bun install --frozen-lockfile` sees the same workspace set as the lockfile.
-apps/web/*
-!apps/web/package.json
-.git
-.github
-dist
-**/dist
 .next
 **/.next
+dist
+**/dist
+.git
+.github
+*.tsbuildinfo
+.env
+.env.*
 *.md
