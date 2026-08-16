@@ -35,6 +35,16 @@ export default defineConfig({
           include: ["src/**/*.test.ts"],
         },
       },
+      {
+        // Framework-free client logic only (`.ts`, not `.tsx`) — no DOM needed.
+        resolve: { alias },
+        test: {
+          name: "web",
+          root: "./apps/web",
+          environment: "node",
+          include: ["src/**/*.test.ts"],
+        },
+      },
     ],
   },
 });
