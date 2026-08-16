@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Room, ServerMessage, ServerMessageType } from "@musicphone/shared";
+import { getRole, type Room, type ServerMessage, type ServerMessageType } from "@musicphone/shared";
 import { EMPTY_ROOM_TTL_MS, LEAVE_GRACE_MS, type ReducerContext } from "../game/reducer";
 import { ConnectionRegistry } from "./connections";
 import { LocalScheduler } from "./scheduler/local-scheduler";
@@ -572,6 +572,9 @@ describe("concurrent commands", () => {
   it("keeps a burst of autosaves from clobbering one another", async () => {
     const { code, sockets } = await startedGame(2);
     const player = sockets[0]!.playerId;
+    const room = await service.get(code);
+    // Cycle through the sounds this player's dealt kit actually offers.
+    const sounds = getRole(room!.assignments[player])!.instruments;
 
     await Promise.all(
       Array.from({ length: 20 }, (_, i) =>
@@ -579,12 +582,13 @@ describe("concurrent commands", () => {
           type: "turn:autosave",
           playerId: player,
           notes: [],
-          instrumentId: `sound-${i}`,
+          instrumentId: sounds[i % sounds.length],
         }),
       ),
     );
 
-    // The last write wins; nothing is lost or left half-applied.
-    expect((await service.get(code))!.turns[player]!.instrumentId).toBe("sound-19");
+    // Commands are serialised, so the last one queued is the one that stuck.
+    const expected = sounds[19 % sounds.length];
+    expect((await service.get(code))!.turns[player]!.instrumentId).toBe(expected);
   });
 });

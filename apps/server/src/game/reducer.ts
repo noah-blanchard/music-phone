@@ -70,6 +70,19 @@ function roleOf(room: Room, playerId: string): Role {
   );
 }
 
+/**
+ * Accept a sound only if the player's dealt kit actually offers it.
+ *
+ * The id was previously taken on trust after a length check, so a client could
+ * store any 40-character string and every other client would later try to play
+ * a layer with it. Anything unrecognised is ignored, leaving the previous
+ * choice in place.
+ */
+function acceptedInstrument(role: Role, instrumentId: string | undefined): string | undefined {
+  if (instrumentId === undefined) return undefined;
+  return role.instruments.includes(instrumentId) ? instrumentId : undefined;
+}
+
 /** The player's working state for this round, created on first write. */
 function turnOf(room: Room, playerId: string): TurnState {
   const existing = room.turns[playerId];
@@ -306,14 +319,12 @@ export function reduce(room: Room, command: Command, ctx: ReducerContext): Reduc
 
     case "turn:autosave": {
       if (next.phase !== "playing") return { room, effects: [] };
-      const clean = getMode(next.config.mode).validateTurn(
-        command.notes,
-        next.config,
-        roleOf(next, command.playerId),
-      );
+      const role = roleOf(next, command.playerId);
+      const clean = getMode(next.config.mode).validateTurn(command.notes, next.config, role);
+      const sound = acceptedInstrument(role, command.instrumentId);
       const turn = turnOf(next, command.playerId);
       turn.draft = clean;
-      if (command.instrumentId) turn.instrumentId = command.instrumentId;
+      if (sound) turn.instrumentId = sound;
       // Deliberately silent: autosave fires on every edit and must not put a
       // snapshot on the wire for each keystroke.
       return { room: next, effects: [] };
@@ -321,15 +332,13 @@ export function reduce(room: Room, command: Command, ctx: ReducerContext): Reduc
 
     case "turn:submit": {
       if (next.phase !== "playing") return { room, effects: [] };
-      const clean = getMode(next.config.mode).validateTurn(
-        command.notes,
-        next.config,
-        roleOf(next, command.playerId),
-      );
+      const role = roleOf(next, command.playerId);
+      const clean = getMode(next.config.mode).validateTurn(command.notes, next.config, role);
+      const sound = acceptedInstrument(role, command.instrumentId);
       const turn = turnOf(next, command.playerId);
       turn.draft = clean;
       turn.submitted = clean;
-      if (command.instrumentId) turn.instrumentId = command.instrumentId;
+      if (sound) turn.instrumentId = sound;
       next.ready[command.playerId] = true;
       return { room: next, effects: [{ type: "snapshot" }, ...maybeAdvance(next, ctx)] };
     }

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   DEFAULT_CONFIG,
+  LAYER_ROLES,
   MAX_PLAYERS,
   MIN_PLAYERS,
   getRole,
@@ -82,6 +83,11 @@ function applyAll(room: Room, commands: Command[]): Room {
 function noteFor(room: Room, playerId: string, start: number): Note {
   const isDrums = getRole(room.assignments[playerId])?.editor === "drum-grid";
   return isDrums ? { pitch: 0, start, length: 1 } : { pitch: 60, start, length: 1 };
+}
+
+/** A sound the given player's dealt kit actually offers. */
+function soundFor(room: Room, playerId: string): string {
+  return getRole(room.assignments[playerId])!.instruments[0]!;
 }
 
 const effectTypes = (result: ReduceResult) => result.effects.map((e) => e.type);
@@ -481,20 +487,64 @@ describe("turn:autosave", () => {
   it("remembers the chosen sound, and leaves it alone when none is sent", () => {
     const room = startedGame(2);
     const player = room.players[0]!;
+    const sound = soundFor(room, player.id);
 
     const withSound = reduce(
       room,
-      { type: "turn:autosave", playerId: player.id, notes: [], instrumentId: "fmbass" },
+      { type: "turn:autosave", playerId: player.id, notes: [], instrumentId: sound },
       ctx,
     ).room;
-    expect(withSound.turns[player.id]!.instrumentId).toBe("fmbass");
+    expect(withSound.turns[player.id]!.instrumentId).toBe(sound);
 
     const without = reduce(
       withSound,
       { type: "turn:autosave", playerId: player.id, notes: [] },
       ctx,
     ).room;
-    expect(without.turns[player.id]!.instrumentId).toBe("fmbass");
+    expect(without.turns[player.id]!.instrumentId).toBe(sound);
+  });
+
+  it("accepts any sound the player's own kit offers", () => {
+    const room = startedGame(2);
+    const player = room.players[0]!;
+    for (const sound of getRole(room.assignments[player.id])!.instruments) {
+      const after = reduce(
+        room,
+        { type: "turn:autosave", playerId: player.id, notes: [], instrumentId: sound },
+        ctx,
+      ).room;
+      expect(after.turns[player.id]!.instrumentId).toBe(sound);
+    }
+  });
+
+  it.each([
+    ["an unknown id", "definitely-not-a-sound"],
+    ["a sound belonging to a different kit", "__other__"],
+    ["an empty string", ""],
+  ])("ignores %s rather than storing it", (_label, candidate) => {
+    const room = startedGame(3);
+    const player = room.players[0]!;
+    const own = getRole(room.assignments[player.id])!;
+    // Pick a real sound that belongs to some *other* kit.
+    const foreign =
+      LAYER_ROLES.flatMap((r) => r.instruments).find((id) => !own.instruments.includes(id)) ?? "x";
+    const instrumentId = candidate === "__other__" ? foreign : candidate;
+
+    const good = soundFor(room, player.id);
+    const seeded = reduce(
+      room,
+      { type: "turn:autosave", playerId: player.id, notes: [], instrumentId: good },
+      ctx,
+    ).room;
+
+    const after = reduce(
+      seeded,
+      { type: "turn:autosave", playerId: player.id, notes: [], instrumentId },
+      ctx,
+    ).room;
+
+    // The earlier, legitimate choice survives untouched.
+    expect(after.turns[player.id]!.instrumentId).toBe(good);
   });
 
   it("is ignored outside the playing phase", () => {
