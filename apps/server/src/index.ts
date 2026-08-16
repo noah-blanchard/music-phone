@@ -38,8 +38,9 @@ console.log(
 );
 
 /**
- * Render restarts the process on deploy and after idle spin-down. Shut down
- * cleanly so the process exits promptly rather than being killed.
+ * The container is replaced on every deploy, and the orchestrator asks politely
+ * before it insists. Shut down cleanly so the process exits promptly rather
+ * than being killed.
  */
 let shuttingDown = false;
 for (const signal of ["SIGTERM", "SIGINT"] as const) {

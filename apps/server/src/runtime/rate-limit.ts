@@ -97,7 +97,7 @@ export class RateLimiter {
 /**
  * Best-effort client address.
  *
- * Render (and any reverse proxy) puts the real client first in
+ * Traefik — like any reverse proxy — puts the real client first in
  * X-Forwarded-For; the socket address there is the proxy's and would lump every
  * caller into one bucket. Falls back to the socket address, then to a shared
  * key — which throttles collectively rather than not at all.
