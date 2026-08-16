@@ -313,6 +313,25 @@ describe("reaping an empty room", () => {
     expect(await service.get(code)).toBeDefined();
   });
 
+  it("collects a room that was created but never joined", async () => {
+    // POST /rooms is unauthenticated, so a script could once loop it and grow
+    // the store without bound: the reaper was only armed when someone left, and
+    // nobody had ever arrived.
+    const { code } = await service.create("Ghost");
+    expect(await service.get(code)).toBeDefined();
+
+    await vi.advanceTimersByTimeAsync(EMPTY_ROOM_TTL_MS);
+    expect(await service.get(code)).toBeUndefined();
+  });
+
+  it("spares a created room the host actually connects to", async () => {
+    const { code, playerId } = await service.create("Host");
+    await connect(code, playerId);
+
+    await vi.advanceTimersByTimeAsync(EMPTY_ROOM_TTL_MS * 2);
+    expect(await service.get(code)).toBeDefined();
+  });
+
   it("keeps a finished game around for the reveal until everyone has gone", async () => {
     const { code, sockets } = await startedGame(2);
     for (let round = 0; round < 2; round++) {

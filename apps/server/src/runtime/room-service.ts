@@ -2,7 +2,13 @@ import type { GameConfig, Room, ServerMessage } from "@musicphone/shared";
 import type { Command } from "../game/commands";
 import type { Effect } from "../game/effects";
 import { createRoom, joinRoom, randomCode } from "../game/create";
-import { reduce, roundStartedMessage, type ReducerContext } from "../game/reducer";
+import { REAP_TIMER } from "../game/effects";
+import {
+  EMPTY_ROOM_TTL_MS,
+  reduce,
+  roundStartedMessage,
+  type ReducerContext,
+} from "../game/reducer";
 import { toSnapshot } from "../game/serialize";
 import type { RoomBus } from "./bus/types";
 import type { RoundScheduler } from "./scheduler/types";
@@ -62,7 +68,17 @@ export class RoomService {
       const ctx = this.context();
       const code = randomCode(ctx.random);
       const { room, playerId } = createRoom(code, hostName, config, ctx);
-      if (await this.store.create(room)) return { code, playerId };
+      if (!(await this.store.create(room))) continue;
+
+      // A room is born empty: nobody connects until the host's browser opens a
+      // socket. Without this, a room created and then abandoned — or created by
+      // a script that never connects — would sit there for good, because the
+      // reaper was only ever armed when someone left.
+      this.scheduler.schedule(code, REAP_TIMER, ctx.now + EMPTY_ROOM_TTL_MS, () => {
+        void this.dispatch(code, { type: "room:reap" });
+      });
+
+      return { code, playerId };
     }
     throw new Error("Could not allocate a room code");
   }
