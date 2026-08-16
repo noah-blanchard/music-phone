@@ -11,12 +11,12 @@ import {
   sanitizeConfig,
   type GameConfig,
   type Melody,
-  type Note,
   type Player,
   type Role,
   type Room,
   type ScaleType,
   type ServerMessage,
+  type TurnState,
 } from "@musicphone/shared";
 import { toSnapshot } from "./serialize";
 
@@ -26,15 +26,13 @@ function pick<T>(arr: readonly T[]): T {
 
 type Sender = (msg: ServerMessage) => void;
 
-/** Per-room runtime state that is intentionally NOT part of the serializable Room. */
+/**
+ * Per-room runtime state that is intentionally NOT part of the serializable
+ * Room: live sockets and host-process timers, neither of which can be
+ * persisted. Per-turn work lives in `room.turns` instead.
+ */
 interface RoomRuntime {
   sockets: Map<string, Sender>;
-  /** Notes a player intends to commit this round (set on submit). */
-  pending: Map<string, Note[]>;
-  /** Latest autosaved draft per player (fallback when a round times out). */
-  drafts: Map<string, Note[]>;
-  /** Latest chosen sound id (instrument/kit) per player for the current round. */
-  instruments: Map<string, string>;
   timer: ReturnType<typeof setTimeout> | null;
   /** Cleanup timer started when a room becomes empty. */
   reaper: ReturnType<typeof setTimeout> | null;
@@ -93,6 +91,7 @@ export class RoomManager {
       melodies: [],
       roundEndsAt: 0,
       ready: {},
+      turns: {},
       assignments: {},
       wheelOffsetDeg: 0,
       reveal: { activeSong: 0, revealedLayers: 0, playing: false, done: false },
@@ -100,9 +99,6 @@ export class RoomManager {
     this.rooms.set(code, room);
     this.runtimes.set(code, {
       sockets: new Map(),
-      pending: new Map(),
-      drafts: new Map(),
-      instruments: new Map(),
       timer: null,
       reaper: null,
       leaveTimers: new Map(),
@@ -352,9 +348,7 @@ export class RoomManager {
     if (!room || !rt) return;
 
     room.ready = {};
-    rt.pending.clear();
-    rt.drafts.clear();
-    rt.instruments.clear();
+    room.turns = {};
     room.roundEndsAt = Date.now() + room.config.roundDurationSec * 1000;
 
     if (rt.timer) clearTimeout(rt.timer);
@@ -368,6 +362,15 @@ export class RoomManager {
     }
   }
 
+  /** The player's working state for this round, created on first write. */
+  private turnOf(room: Room, playerId: string): TurnState {
+    const existing = room.turns[playerId];
+    if (existing) return existing;
+    const created: TurnState = { draft: [] };
+    room.turns[playerId] = created;
+    return created;
+  }
+
   autosave(code: string, playerId: string, notes: unknown, instrumentId?: string): void {
     const room = this.rooms.get(code);
     const rt = this.runtimes.get(code);
@@ -377,8 +380,9 @@ export class RoomManager {
       room.config,
       this.roleOf(room, playerId),
     );
-    rt.drafts.set(playerId, clean);
-    if (instrumentId) rt.instruments.set(playerId, instrumentId);
+    const turn = this.turnOf(room, playerId);
+    turn.draft = clean;
+    if (instrumentId) turn.instrumentId = instrumentId;
   }
 
   submit(code: string, playerId: string, notes: unknown, instrumentId?: string): void {
@@ -390,9 +394,10 @@ export class RoomManager {
       room.config,
       this.roleOf(room, playerId),
     );
-    rt.pending.set(playerId, clean);
-    rt.drafts.set(playerId, clean);
-    if (instrumentId) rt.instruments.set(playerId, instrumentId);
+    const turn = this.turnOf(room, playerId);
+    turn.draft = clean;
+    turn.submitted = clean;
+    if (instrumentId) turn.instrumentId = instrumentId;
     room.ready[playerId] = true;
     this.broadcastSnapshot(code);
     this.maybeAdvance(code);
@@ -429,14 +434,15 @@ export class RoomManager {
     const mode = getMode(room.config.mode);
     const n = room.players.length;
     room.players.forEach((player, idx) => {
-      const notes = rt.pending.get(player.id) ?? rt.drafts.get(player.id) ?? [];
+      const turn = room.turns[player.id];
+      const notes = turn?.submitted ?? turn?.draft ?? [];
       const melody = room.melodies[mode.assign(idx, room.round, n)]!;
       melody.segments.push({
         authorId: player.id,
         authorName: player.name,
         order: room.round,
         roleId: this.roleOf(room, player.id).id,
-        instrumentId: rt.instruments.get(player.id),
+        instrumentId: turn?.instrumentId,
         notes,
       });
     });

@@ -71,6 +71,23 @@ export interface Player {
   isHost: boolean;
 }
 
+/**
+ * One player's in-progress work for the current round. Reset when a round
+ * begins and committed to a Segment when it ends.
+ *
+ * This lives inside `Room` rather than in server-side runtime maps so that the
+ * whole room is serializable: a player who reconnects mid-round can be handed
+ * their work back, and the room survives a server restart.
+ */
+export interface TurnState {
+  /** Latest autosaved notes. Committed if the round ends without a submit. */
+  draft: Note[];
+  /** Notes explicitly submitted. Takes precedence over `draft` when committing. */
+  submitted?: Note[];
+  /** The sound chosen for this layer: an instrument id, or a kit id for drums. */
+  instrumentId?: string;
+}
+
 export type Phase = "lobby" | "playing" | "results";
 
 /** Immutable-once-started configuration chosen by the host. */
@@ -105,6 +122,12 @@ export interface Room {
   roundEndsAt: number;
   /** Per-player ready flag for the current round, keyed by playerId. */
   ready: Record<string, boolean>;
+  /**
+   * Per-player working state for the current round, keyed by playerId. Cleared
+   * when each round begins. Never included in a RoomSnapshot — one player's
+   * unfinished layer must not reach another's client.
+   */
+  turns: Record<string, TurnState>;
   /** Wheel-assigned role per player (playerId → roleId), set at game start. */
   assignments: Record<string, string>;
   /** Final wheel rotation in degrees, for the synced spin animation. */
