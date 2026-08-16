@@ -8,7 +8,28 @@ import type { GameConfig } from "@musicphone/shared";
  * never enters the browser bundle. Realtime gameplay uses the WebSocket in ws.ts.
  */
 
-export const SERVER_URL = process.env.NEXT_PUBLIC_SERVER_URL ?? "http://localhost:3001";
+/**
+ * Base URL of the game server.
+ *
+ * NEXT_PUBLIC_ values are inlined at build time, so forgetting to set this in
+ * the deployment environment used to produce a production bundle that quietly
+ * pointed at localhost:3001 — working perfectly for whoever built it and for
+ * nobody else. A missing value is now a build failure rather than a runtime
+ * mystery; only development falls back.
+ */
+function resolveServerUrl(): string {
+  const configured = process.env.NEXT_PUBLIC_SERVER_URL?.trim();
+  if (configured) return configured.replace(/\/+$/, "");
+
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "NEXT_PUBLIC_SERVER_URL is not set. Point it at the game server before building for production.",
+    );
+  }
+  return "http://localhost:3001";
+}
+
+export const SERVER_URL = resolveServerUrl();
 
 export const api = treaty<App>(SERVER_URL);
 
