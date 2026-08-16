@@ -19,9 +19,40 @@ Point two `A` records at the VPS:
 
 ## 2. Redis
 
-Dokploy → **Databases → Redis**. Create it, then copy its **internal**
-connection URL — the server reaches it over Dokploy's private network, so this
-never needs to be exposed publicly.
+Dokploy → **Databases → Redis**. Create it inside the **same project** as the two
+applications: the internal host below only resolves for containers sharing that
+project's network. Do this before the server application, so `REDIS_URL` exists
+the first time the server boots.
+
+Creating the database does not start it. On its **General** tab, press
+**Deploy** and wait for the container to come up.
+
+**Internal Credentials** is where the connection details live:
+
+| Field                   | What it is                                                        |
+| ----------------------- | ----------------------------------------------------------------- |
+| User                    | `default` — Redis' built-in user, not editable                    |
+| Password                | generated for you; reveal it with the eye icon                    |
+| Internal Port           | `6379`                                                            |
+| Internal Host           | the container name, e.g. `music-phone-redis-lajfto`               |
+| Internal Connection URL | all of the above as one `redis://default:…@host:6379` string      |
+
+Copy the **Internal Connection URL** with its copy button and paste it whole
+into the server's `REDIS_URL` in step 3. Do not retype it from the parts above:
+a generated password can contain characters that have to be percent-encoded in a
+URL, and copying sidesteps the question. The server checks the scheme and
+refuses to start unless the value begins with `redis://` or `rediss://`, so a
+truncated paste fails loudly rather than falling back to memory.
+
+**Leave External Port empty.** Filling it publishes Redis on the VPS' public IP
+with nothing but that password in front of it. The applications reach the
+database over Dokploy's private network, which is why the internal URL is plain
+`redis://` and why exposing it buys nothing.
+
+If you set a memory limit under **Advanced**, pair it with
+`--maxmemory-policy noeviction`. Rooms carry their own four-hour TTL; an
+eviction policy that reclaims keys early would delete games that are still being
+played.
 
 ## 3. Server application
 
