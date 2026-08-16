@@ -22,6 +22,13 @@ export interface RoomCredentials {
   playerId: string;
 }
 
+/** Pull the server's own message out of an error response, if it sent one. */
+function serverMessage(value: unknown): string | undefined {
+  return typeof value === "object" && value !== null && "error" in value
+    ? ((value as { error?: unknown }).error as string | undefined)
+    : undefined;
+}
+
 export async function createRoom(
   nickname: string,
   config?: Partial<
@@ -29,13 +36,18 @@ export async function createRoom(
   >,
 ): Promise<RoomCredentials> {
   const { data, error } = await api.rooms.post({ nickname, config });
-  if (error || !data) throw new Error("Could not create room");
+  // Surface the server's wording — notably the rate-limit message, which tells
+  // the player to wait rather than leaving them to guess.
+  if (error) throw new Error(serverMessage(error.value) ?? "Could not create room");
+  if (!data || "error" in data) {
+    throw new Error(serverMessage(data) ?? "Could not create room");
+  }
   return data;
 }
 
 export async function joinRoom(code: string, nickname: string): Promise<RoomCredentials> {
   const { data, error } = await api.rooms({ code }).join.post({ nickname });
-  if (error) throw new Error((error.value as { error?: string })?.error ?? "Could not join room");
-  if (!data || "error" in data) throw new Error("Could not join room");
+  if (error) throw new Error(serverMessage(error.value) ?? "Could not join room");
+  if (!data || "error" in data) throw new Error(serverMessage(data) ?? "Could not join room");
   return data;
 }
