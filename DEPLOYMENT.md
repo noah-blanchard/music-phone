@@ -30,23 +30,23 @@ field — the Dockerfile path — since they are two images built from the same 
 
 **Provider** panel:
 
-| Field         | Value                                                                        |
-| ------------- | ---------------------------------------------------------------------------- |
-| Provider      | Github                                                                       |
-| Repository    | this repository                                                              |
-| Branch        | `master`                                                                     |
-| Build Path    | `/` — leave it alone, see below                                              |
-| Trigger Type  | On Push                                                                      |
-| Watch Paths   | optional: `apps/server/**`, `packages/shared/**`, `package.json`, `bun.lock` |
+| Field        | Value                                                                        |
+| ------------ | ---------------------------------------------------------------------------- |
+| Provider     | Github                                                                       |
+| Repository   | this repository                                                              |
+| Branch       | `master`                                                                     |
+| Build Path   | `/` — leave it alone, see below                                              |
+| Trigger Type | On Push                                                                      |
+| Watch Paths  | optional: `apps/server/**`, `packages/shared/**`, `package.json`, `bun.lock` |
 
 **Build Type** panel:
 
-| Field               | Value                                        |
-| ------------------- | -------------------------------------------- |
-| Build Type          | Dockerfile                                   |
-| Docker File         | `apps/server/Dockerfile`                     |
-| Docker Context Path | empty — the default `.` is the repo root     |
-| Docker Build Stage  | empty — the image is single-stage            |
+| Field               | Value                                    |
+| ------------------- | ---------------------------------------- |
+| Build Type          | Dockerfile                               |
+| Docker File         | `apps/server/Dockerfile`                 |
+| Docker Context Path | empty — the default `.` is the repo root |
+| Docker Build Stage  | empty — the image is single-stage        |
 
 Neither Build Path nor Docker Context Path may be narrowed to `apps/server`.
 Both Dockerfiles copy `package.json`, `bun.lock` and `packages/shared` from the
@@ -79,30 +79,30 @@ watch paths, if you set any, pointing at `apps/web/**` instead of
 
 **Build Type** panel:
 
-| Field               | Value                                              |
-| ------------------- | -------------------------------------------------- |
-| Build Type          | Dockerfile                                         |
-| Docker File         | `apps/web/Dockerfile`                              |
-| Docker Context Path | empty — the default `.` is the repo root           |
-| Docker Build Stage  | empty — `runner` is already the last stage         |
+| Field               | Value                                      |
+| ------------------- | ------------------------------------------ |
+| Build Type          | Dockerfile                                 |
+| Docker File         | `apps/web/Dockerfile`                      |
+| Docker Context Path | empty — the default `.` is the repo root   |
+| Docker Build Stage  | empty — `runner` is already the last stage |
 
 **Domain**: `play.example.com` → container port **3000**, HTTPS + Let's Encrypt.
 
-**Build-time value**, set under **Environment**:
+**Build-time value.** In the **Environment** tab, scroll past the environment
+variables to the separate **Build-Time Arguments** box and put it there:
 
-| Variable                 | Value                     |
-| ------------------------ | ------------------------- |
-| `NEXT_PUBLIC_SERVER_URL` | `https://api.example.com` |
+```
+NEXT_PUBLIC_SERVER_URL=https://api.example.com
+```
 
-Dokploy forwards an application's environment variables to `docker build` as
-build arguments, which is what makes this work; the Dockerfile declares the
-matching `ARG`. If a build still reports the variable as missing, look for
-**Build Args** under Advanced and set it there as well.
+This is the single easiest thing to get wrong, so it is worth being blunt about:
+Dokploy passes **only** Build-Time Arguments to a Dockerfile build. The same
+name typed into the environment variables above it reaches the container at run
+time — long after `next build` has inlined `NEXT_PUBLIC_*` values into the
+JavaScript — and the build stops with `NEXT_PUBLIC_SERVER_URL is empty`.
 
-`NEXT_PUBLIC_*` values are inlined into the bundle during `next build`, so this
-has to be present at build time; a value that only exists at run time does
-nothing. Changing it later means a rebuild, not a restart. A build without it
-fails deliberately — the alternative was a bundle silently pointing at
+Changing the value later means a rebuild, not a restart. The build refusing to
+proceed is deliberate: the alternative was a bundle silently pointing at
 `localhost:3001`, which works for whoever built it and for nobody else.
 
 The client derives the WebSocket URL from the same value, so `https://` becomes
