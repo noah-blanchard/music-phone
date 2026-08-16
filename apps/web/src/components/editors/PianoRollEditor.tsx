@@ -17,6 +17,7 @@ import {
   type ScaleType,
 } from "@musicphone/shared";
 import { ensureAudio, previewInstrument } from "@/lib/audio/engine";
+import type { Playhead } from "@/lib/playhead";
 
 const KEYS_W = 56;
 const ROW_H = 22; // fixed row height — the roll scrolls instead of squishing
@@ -35,7 +36,8 @@ interface Props {
   /** Read-only prior layers shown behind the grid (each in its role colour). */
   contextLayers: Layer[];
   onChange: (notes: Note[]) => void;
-  playStep?: number | null;
+  /** Transport position, delivered outside React so playback cannot re-render. */
+  playhead: Playhead;
   /** Read-only context view (no placement/preview). */
   readOnly?: boolean;
 }
@@ -56,7 +58,7 @@ export function PianoRollEditor({
   draft,
   contextLayers,
   onChange,
-  playStep,
+  playhead,
   readOnly,
 }: Props) {
   const pitches = useMemo(
@@ -66,6 +68,9 @@ export function PianoRollEditor({
         .reverse(),
     [],
   );
+  // Row lookup for note placement. indexOf over 61 rows, once per rendered note,
+  // is a lot of scanning for something this fixed.
+  const rowOf = useMemo(() => new Map(pitches.map((p, r) => [p, r])), [pitches]);
   const inScale = useCallback(
     (p: number) => {
       const cls = (((p - songRoot) % 12) + 12) % 12;
@@ -79,6 +84,8 @@ export function PianoRollEditor({
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
+  const keysRef = useRef<HTMLDivElement>(null);
+  const playheadRef = useRef<HTMLDivElement>(null);
   const [gridW, setGridW] = useState(0);
   const [drawing, setDrawing] = useState<{ pitch: number; start: number } | null>(null);
   const draftRef = useRef(draft);
@@ -100,10 +107,9 @@ export function PianoRollEditor({
     const sc = scrollRef.current;
     if (!sc) return;
     const focusPitch = songRoot + role.octaveOffset * 12 + Math.round(role.octaves * 6);
-    let idx = pitches.indexOf(focusPitch);
-    if (idx < 0) idx = Math.round(rows / 2);
+    const idx = rowOf.get(focusPitch) ?? Math.round(rows / 2);
     sc.scrollTop = Math.max(0, idx * ROW_H - sc.clientHeight / 2);
-  }, [songRoot, role.octaveOffset, role.octaves, pitches, rows]);
+  }, [songRoot, role.octaveOffset, role.octaves, rowOf, rows]);
 
   const locate = useCallback(
     (clientX: number, clientY: number): { pitch: number; step: number } | null => {
@@ -160,24 +166,48 @@ export function PianoRollEditor({
     };
   }, [drawing, locate, editSteps, onChange]);
 
-  const litPitches = useMemo(() => {
-    const lit = new Set<number>();
-    if (playStep != null && playStep >= 0) {
-      for (const n of draft) {
-        if (playStep >= n.start && playStep < n.start + n.length) lit.add(n.pitch);
-      }
-    }
-    return lit;
-  }, [playStep, draft]);
+  // Playback is written straight to the DOM. The bar moves and a few notes light
+  // up nine times a second at 140 BPM; nothing else on the grid changes with it,
+  // so none of it is worth a React render while someone is drawing.
+  useEffect(() => {
+    if (cellW <= 0) return;
+    return playhead.subscribe((step) => {
+      const playing = step != null && step >= 0;
 
-  const renderNote = (note: Note, color: string, readOnly: boolean, key: string) => {
-    const row = pitches.indexOf(note.pitch);
-    if (row < 0) return null;
-    const flash = !readOnly && litPitches.has(note.pitch);
+      const bar = playheadRef.current;
+      if (bar) {
+        bar.classList.toggle("off", !playing);
+        if (playing) bar.style.transform = `translateX(${step * cellW}px)`;
+      }
+
+      const lit = new Set<number>();
+      if (playing) {
+        for (const n of draftRef.current) {
+          if (step >= n.start && step < n.start + n.length) lit.add(n.pitch);
+        }
+      }
+
+      const keys = keysRef.current;
+      if (keys) {
+        for (const el of Array.from(keys.children) as HTMLElement[]) {
+          const pitch = Number(el.dataset.pitch);
+          el.classList.toggle("lit", !el.classList.contains("locked") && lit.has(pitch));
+        }
+      }
+      gridRef.current?.querySelectorAll<HTMLElement>(".pr-note:not(.pr-ctx)").forEach((el) => {
+        el.classList.toggle("flash", lit.has(Number(el.dataset.pitch)));
+      });
+    });
+  }, [playhead, cellW]);
+
+  const renderNote = (note: Note, color: string, context: boolean, key: string) => {
+    const row = rowOf.get(note.pitch);
+    if (row === undefined) return null;
     return (
       <div
         key={key}
-        className={`pr-note${readOnly ? " pr-ctx" : ""}${flash ? " flash" : ""}`}
+        data-pitch={note.pitch}
+        className={`pr-note${context ? " pr-ctx" : ""}`}
         style={{
           left: note.start * cellW,
           top: row * ROW_H + 1,
@@ -191,17 +221,76 @@ export function PianoRollEditor({
 
   const ready = cellW > 0;
 
+  // The grid backdrop depends only on the layout and the scale, so it is built
+  // once per resize rather than on every draft edit.
+  const backdrop = useMemo(() => {
+    if (!ready) return null;
+    return (
+      <>
+        {pitches.map((p, r) => {
+          const locked = !unlocked && !inScale(p);
+          const offscale = unlocked && !inScale(p);
+          const isRoot = p % 12 === songRoot % 12;
+          const cls = locked
+            ? "locked"
+            : `in-scale${isRoot ? " root" : ""}${offscale ? " offscale" : ""}${r % 2 ? " alt" : ""}`;
+          return (
+            <div
+              key={`row-${p}`}
+              className={`pr-row ${cls}`}
+              style={{ top: r * ROW_H, height: ROW_H, width: gridW }}
+            />
+          );
+        })}
+
+        {pitches.map((p, r) => (
+          <div
+            key={`rl-${p}`}
+            className="pr-rowline"
+            style={{ top: (r + 1) * ROW_H - 1, width: gridW }}
+          />
+        ))}
+
+        {Array.from({ length: editSteps + 1 }).map((_, c) => {
+          const cls = c % config.stepsPerMeasure === 0 ? "measure" : c % 4 === 0 ? "beat" : "";
+          return (
+            <div
+              key={`col-${c}`}
+              className={`pr-col ${cls}`}
+              style={{ left: c * cellW, height: contentH }}
+            />
+          );
+        })}
+      </>
+    );
+  }, [
+    ready,
+    pitches,
+    unlocked,
+    inScale,
+    songRoot,
+    gridW,
+    cellW,
+    contentH,
+    editSteps,
+    config.stepsPerMeasure,
+  ]);
+
   return (
     <div className="pr">
       <div ref={scrollRef} className="pr-scroll">
         {/* Piano keyboard gutter */}
-        <div className="pr-keys" style={{ width: KEYS_W, height: contentH }}>
+        <div ref={keysRef} className="pr-keys" style={{ width: KEYS_W, height: contentH }}>
           {pitches.map((p, r) => {
             const locked = !unlocked && !inScale(p);
-            const lit = litPitches.has(p);
-            const cls = locked ? "locked" : lit ? "lit" : isBlackKey(p) ? "black" : "white";
+            const cls = locked ? "locked" : isBlackKey(p) ? "black" : "white";
             return (
-              <div key={p} className={`pr-key ${cls}`} style={{ top: r * ROW_H, height: ROW_H }}>
+              <div
+                key={p}
+                data-pitch={p}
+                className={`pr-key ${cls}`}
+                style={{ top: r * ROW_H, height: ROW_H }}
+              >
                 {p % 12 === songRoot % 12 ? noteLabel(p) : ""}
               </div>
             );
@@ -217,45 +306,10 @@ export function PianoRollEditor({
         >
           {ready && (
             <>
-              {pitches.map((p, r) => {
-                const locked = !unlocked && !inScale(p);
-                const offscale = unlocked && !inScale(p);
-                const isRoot = p % 12 === songRoot % 12;
-                const cls = locked
-                  ? "locked"
-                  : `in-scale${isRoot ? " root" : ""}${offscale ? " offscale" : ""}${r % 2 ? " alt" : ""}`;
-                return (
-                  <div
-                    key={`row-${p}`}
-                    className={`pr-row ${cls}`}
-                    style={{ top: r * ROW_H, height: ROW_H, width: gridW }}
-                  />
-                );
-              })}
+              {backdrop}
 
-              {pitches.map((p, r) => (
-                <div
-                  key={`rl-${p}`}
-                  className="pr-rowline"
-                  style={{ top: (r + 1) * ROW_H - 1, width: gridW }}
-                />
-              ))}
-
-              {Array.from({ length: editSteps + 1 }).map((_, c) => {
-                const cls =
-                  c % config.stepsPerMeasure === 0 ? "measure" : c % 4 === 0 ? "beat" : "";
-                return (
-                  <div
-                    key={`col-${c}`}
-                    className={`pr-col ${cls}`}
-                    style={{ left: c * cellW, height: contentH }}
-                  />
-                );
-              })}
-
-              {playStep != null && playStep >= 0 && (
-                <div className="pr-playhead" style={{ left: playStep * cellW, height: contentH }} />
-              )}
+              {/* Always mounted; the effect above moves and hides it. */}
+              <div ref={playheadRef} className="pr-playhead off" style={{ height: contentH }} />
 
               {contextLayers.flatMap((layer, li) => {
                 const color = getRole(layer.roleId)?.color ?? "#888";

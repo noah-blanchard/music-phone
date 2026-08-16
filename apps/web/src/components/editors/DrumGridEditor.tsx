@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   getRole,
   loopSteps,
@@ -11,6 +11,7 @@ import {
 } from "@musicphone/shared";
 import { DRUM_LANES } from "@/lib/audio/drums";
 import { ensureAudio, previewDrum } from "@/lib/audio/engine";
+import type { Playhead } from "@/lib/playhead";
 
 const GUTTER_W = 150; // wide enough for the lane label + fill buttons
 const LANE_H = 30; // fixed, compact lanes (the strip does not stretch to fill)
@@ -31,7 +32,8 @@ interface Props {
   draft: Note[];
   contextLayers: Layer[];
   onChange: (notes: Note[]) => void;
-  playStep?: number | null;
+  /** Transport position, delivered outside React so playback cannot re-render. */
+  playhead: Playhead;
   /** Read-only context view (no editing, no fill controls). */
   readOnly?: boolean;
 }
@@ -49,7 +51,7 @@ export function DrumGridEditor({
   draft,
   contextLayers,
   onChange,
-  playStep,
+  playhead,
   readOnly,
 }: Props) {
   const lanes = DRUM_LANES;
@@ -58,6 +60,7 @@ export function DrumGridEditor({
   const gridH = rows * LANE_H;
 
   const gridRef = useRef<HTMLDivElement>(null);
+  const playheadRef = useRef<HTMLDivElement>(null);
   const [gridW, setGridW] = useState(0);
   const draftRef = useRef(draft);
   draftRef.current = draft;
@@ -110,12 +113,65 @@ export function DrumGridEditor({
 
   const ready = cellW > 0;
 
-  const cell = (lane: number, step: number, color: string, ro: boolean, key: string) => {
-    const flash = !ro && playStep === step;
+  // Same as the piano roll: the bar and the hit flashes are DOM writes, not
+  // renders, so playback costs nothing while the player is editing.
+  useEffect(() => {
+    if (cellW <= 0) return;
+    return playhead.subscribe((step) => {
+      const playing = step != null && step >= 0;
+
+      const bar = playheadRef.current;
+      if (bar) {
+        bar.classList.toggle("off", !playing);
+        if (playing) bar.style.transform = `translateX(${step * cellW}px)`;
+      }
+
+      gridRef.current?.querySelectorAll<HTMLElement>(".dg-hit:not(.dg-ctx)").forEach((el) => {
+        el.classList.toggle("flash", playing && Number(el.dataset.step) === step);
+      });
+    });
+  }, [playhead, cellW]);
+
+  // Static backdrop: lanes and grid lines move only when the loop is resized.
+  const backdrop = useMemo(() => {
+    if (!ready) return null;
+    return (
+      <>
+        {lanes.map((l) => (
+          <div
+            key={`row-${l.id}`}
+            className={`pr-row in-scale${l.index % 2 ? " alt" : ""}`}
+            style={{ top: l.index * LANE_H, height: LANE_H, width: gridW }}
+          />
+        ))}
+        {lanes.map((l) => (
+          <div
+            key={`rl-${l.id}`}
+            className="pr-rowline"
+            style={{ top: (l.index + 1) * LANE_H - 1, width: gridW }}
+          />
+        ))}
+
+        {Array.from({ length: editSteps + 1 }).map((_, c) => {
+          const cls = c % config.stepsPerMeasure === 0 ? "measure" : c % 4 === 0 ? "beat" : "";
+          return (
+            <div
+              key={`col-${c}`}
+              className={`pr-col ${cls}`}
+              style={{ left: c * cellW, height: gridH }}
+            />
+          );
+        })}
+      </>
+    );
+  }, [ready, lanes, gridW, cellW, gridH, editSteps, config.stepsPerMeasure]);
+
+  const cell = (lane: number, step: number, color: string, context: boolean, key: string) => {
     return (
       <div
         key={key}
-        className={`dg-hit${ro ? " dg-ctx" : ""}${flash ? " flash" : ""}`}
+        data-step={step}
+        className={`dg-hit${context ? " dg-ctx" : ""}`}
         style={{
           left: step * cellW + 1,
           top: lane * LANE_H + 1,
@@ -162,35 +218,10 @@ export function DrumGridEditor({
       <div ref={gridRef} className="dg-grid" onMouseDown={(e) => toggle(e.clientX, e.clientY)}>
         {ready && (
           <>
-            {lanes.map((l) => (
-              <div
-                key={`row-${l.id}`}
-                className={`pr-row in-scale${l.index % 2 ? " alt" : ""}`}
-                style={{ top: l.index * LANE_H, height: LANE_H, width: gridW }}
-              />
-            ))}
-            {lanes.map((l) => (
-              <div
-                key={`rl-${l.id}`}
-                className="pr-rowline"
-                style={{ top: (l.index + 1) * LANE_H - 1, width: gridW }}
-              />
-            ))}
+            {backdrop}
 
-            {Array.from({ length: editSteps + 1 }).map((_, c) => {
-              const cls = c % config.stepsPerMeasure === 0 ? "measure" : c % 4 === 0 ? "beat" : "";
-              return (
-                <div
-                  key={`col-${c}`}
-                  className={`pr-col ${cls}`}
-                  style={{ left: c * cellW, height: gridH }}
-                />
-              );
-            })}
-
-            {playStep != null && playStep >= 0 && (
-              <div className="pr-playhead" style={{ left: playStep * cellW, height: gridH }} />
-            )}
+            {/* Always mounted; the effect above moves and hides it. */}
+            <div ref={playheadRef} className="pr-playhead off" style={{ height: gridH }} />
 
             {drumContext.flatMap((layer, li) => {
               const color = getRole(layer.roleId)?.color ?? "#888";

@@ -217,13 +217,20 @@
   user-select: none;
 }
 
-/* Playhead */
+/* Playhead. Stays mounted and is moved by transform from the transport
+   subscription, so playback never re-renders the grid; `.off` parks it while
+   nothing is playing. */
 .pr-playhead {
   position: absolute;
   top: 0;
+  left: 0;
   width: 2px;
   background: var(--amber);
   box-shadow: 0 0 12px 2px var(--amber-glow);
   pointer-events: none;
   z-index: 3;
+  will-change: transform;
+}
+.pr-playhead.off {
+  display: none;
 }

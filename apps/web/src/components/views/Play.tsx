@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { createPlayhead } from "@/lib/playhead";
 import { SCALE_LABELS, getRole, loopSteps, noteLabel, type Layer } from "@musicphone/shared";
 import { useGameStore } from "@/store/game-store";
 import { PianoRollEditor } from "@/components/editors/PianoRollEditor";
@@ -36,7 +37,8 @@ export function Play() {
   const clearDraft = useGameStore((s) => s.clearDraft);
   const submitTurn = useGameStore((s) => s.submitTurn);
 
-  const [playStep, setPlayStep] = useState<number | null>(null);
+  // One channel per mounted view; the editors follow it without re-rendering.
+  const [playhead] = useState(createPlayhead);
 
   const { config } = snapshot;
   const readyCount = snapshot.players.filter((p) => snapshot.ready[p.id]).length;
@@ -104,7 +106,7 @@ export function Play() {
                 draft={isDrum ? [] : draft}
                 contextLayers={contextLayers}
                 onChange={isDrum ? noop : setDraft}
-                playStep={playStep}
+                playhead={playhead}
                 readOnly={isDrum}
               />
             </div>
@@ -118,7 +120,7 @@ export function Play() {
                 draft={isDrum ? draft : []}
                 contextLayers={contextLayers}
                 onChange={isDrum ? setDraft : noop}
-                playStep={playStep}
+                playhead={playhead}
                 readOnly={!isDrum}
               />
             </div>
@@ -157,7 +159,7 @@ export function Play() {
               bpm={currentSong.bpm}
               totalSteps={totalSteps}
               layers={playLayersList}
-              onStep={setPlayStep}
+              onStep={playhead.set}
             />
             <button
               className="hw-btn hw-btn--ghost"
