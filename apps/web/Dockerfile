@@ -23,22 +23,10 @@ COPY apps/web apps/web
 
 # Inlined into the client bundle at build time, which is why it is an argument
 # rather than an environment variable: setting it at run time would be too late.
+# The build fails outright if it is missing.
 ARG NEXT_PUBLIC_SERVER_URL
 ENV NEXT_PUBLIC_SERVER_URL=$NEXT_PUBLIC_SERVER_URL
 ENV NEXT_TELEMETRY_DISABLED=1
-
-# `next build` would fail on this anyway, but only after a couple of minutes and
-# as a prerender stack trace. Say it plainly instead, and name the setting —
-# Dokploy passes *Build-Time Arguments* to a Dockerfile build, not the
-# environment variables next to them, and the two are easy to confuse.
-RUN if [ -z "$NEXT_PUBLIC_SERVER_URL" ]; then \
-      echo "NEXT_PUBLIC_SERVER_URL is empty."; \
-      echo "It is baked into the bundle at build time, so it must be a BUILD ARGUMENT."; \
-      echo "  docker build --build-arg NEXT_PUBLIC_SERVER_URL=https://api.example.com ..."; \
-      echo "  Dokploy: Environment tab -> Build-Time Arguments (not Environment variables)"; \
-      exit 1; \
-    fi
-
 RUN cd apps/web && bun run build
 
 # Node, not Bun: `server.js` is Next's own output and Node is what it targets.
