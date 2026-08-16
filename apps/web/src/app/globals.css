@@ -556,7 +556,13 @@ button.strip-seg:disabled {
   text-align: center;
   background: var(--bg);
 }
-@media (max-width: 720px) {
+/*
+ * Blocked on anything phone-sized in either dimension. Width alone let a phone
+ * held sideways through to an editor with no room for the roll, while a tablet
+ * in portrait — which since the pointer-event editors is a perfectly good way
+ * to play — is comfortably above both limits.
+ */
+@media (max-width: 720px), (max-height: 480px) {
   .notice {
     display: grid;
   }

@@ -25,6 +25,8 @@
   position: relative;
   background: linear-gradient(90deg, #141519, #0d0e11);
   border-right: 1px solid #000;
+  /* The one place a touch drag scrolls the roll, since the grid keeps its own. */
+  touch-action: pan-y;
 }
 .pr-key {
   position: absolute;
@@ -64,6 +66,10 @@
   flex: 1 1 auto;
   cursor: crosshair;
   user-select: none;
+  /* Drawing owns every gesture that starts on the grid: without this the
+     browser claims a touch drag as a scroll and the note never gets stretched.
+     Panning the roll is done from the keyboard gutter instead. */
+  touch-action: none;
 }
 .pr-row {
   position: absolute;
@@ -215,6 +221,7 @@
   flex: 1 1 auto;
   cursor: pointer;
   user-select: none;
+  touch-action: none;
 }
 
 /* Playhead. Stays mounted and is moved by transform from the transport

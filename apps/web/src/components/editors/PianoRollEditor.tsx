@@ -87,7 +87,8 @@ export function PianoRollEditor({
   const keysRef = useRef<HTMLDivElement>(null);
   const playheadRef = useRef<HTMLDivElement>(null);
   const [gridW, setGridW] = useState(0);
-  const [drawing, setDrawing] = useState<{ pitch: number; start: number } | null>(null);
+  /** The note currently being stretched, and the pointer doing the stretching. */
+  const dragRef = useRef<{ pointerId: number; pitch: number; start: number } | null>(null);
   const draftRef = useRef(draft);
   draftRef.current = draft;
 
@@ -125,8 +126,12 @@ export function PianoRollEditor({
     [cellW, pitches],
   );
 
-  const onMouseDown = (e: React.MouseEvent) => {
-    if (readOnly) return;
+  // Pointer events, so a finger on a tablet draws exactly as a mouse does.
+  // Capturing the pointer keeps the moves coming to this element even when the
+  // drag leaves the grid, which is what the old window-level mousemove /
+  // mouseup listeners were there to imitate.
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (readOnly || !e.isPrimary) return;
     const hit = locate(e.clientX, e.clientY);
     if (!hit || hit.step < 0 || hit.step >= editSteps) return;
     if (!unlocked && !inScale(hit.pitch)) return;
@@ -141,30 +146,31 @@ export function PianoRollEditor({
 
     const note: Note = { pitch: hit.pitch, start: hit.step, length: 1 };
     onChange([...draftRef.current, note]);
-    setDrawing({ pitch: hit.pitch, start: hit.step });
+    dragRef.current = { pointerId: e.pointerId, pitch: hit.pitch, start: hit.step };
+    e.currentTarget.setPointerCapture(e.pointerId);
     void ensureAudio().then(() => previewInstrument(instrumentId, hit.pitch));
   };
 
-  useEffect(() => {
-    if (!drawing) return;
-    const onMove = (e: MouseEvent) => {
-      const hit = locate(e.clientX, e.clientY);
-      if (!hit) return;
-      const length = Math.min(Math.max(1, hit.step - drawing.start + 1), editSteps - drawing.start);
-      onChange(
-        draftRef.current.map((n) =>
-          n.pitch === drawing.pitch && n.start === drawing.start ? { ...n, length } : n,
-        ),
-      );
-    };
-    const onUp = () => setDrawing(null);
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-    return () => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    };
-  }, [drawing, locate, editSteps, onChange]);
+  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== e.pointerId) return;
+    const hit = locate(e.clientX, e.clientY);
+    if (!hit) return;
+    const length = Math.min(Math.max(1, hit.step - drag.start + 1), editSteps - drag.start);
+    onChange(
+      draftRef.current.map((n) =>
+        n.pitch === drag.pitch && n.start === drag.start ? { ...n, length } : n,
+      ),
+    );
+  };
+
+  const onPointerEnd = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (dragRef.current?.pointerId !== e.pointerId) return;
+    dragRef.current = null;
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    }
+  };
 
   // Playback is written straight to the DOM. The bar moves and a few notes light
   // up nine times a second at 140 BPM; nothing else on the grid changes with it,
@@ -302,7 +308,10 @@ export function PianoRollEditor({
           ref={gridRef}
           className="pr-grid"
           style={{ height: contentH }}
-          onMouseDown={onMouseDown}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerEnd}
+          onPointerCancel={onPointerEnd}
         >
           {ready && (
             <>

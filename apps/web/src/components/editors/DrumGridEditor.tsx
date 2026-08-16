@@ -215,7 +215,14 @@ export function DrumGridEditor({
         ))}
       </div>
 
-      <div ref={gridRef} className="dg-grid" onMouseDown={(e) => toggle(e.clientX, e.clientY)}>
+      <div
+        ref={gridRef}
+        className="dg-grid"
+        // Pointer, not mouse: a tap on a tablet has to place a hit too.
+        onPointerDown={(e) => {
+          if (e.isPrimary) toggle(e.clientX, e.clientY);
+        }}
+      >
         {ready && (
           <>
             {backdrop}
