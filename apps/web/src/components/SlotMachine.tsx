@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import {
   BPM_CHOICES,
@@ -70,11 +70,18 @@ function Reel({
 export function SlotMachine({ song, onDone }: Props) {
   const reduce = !!useReducedMotion();
 
+  // Latest-callback ref, for the same reason as the wheel: the reels must spin
+  // once, not restart whenever the parent re-renders.
+  const onDoneRef = useRef(onDone);
+  useEffect(() => {
+    onDoneRef.current = onDone;
+  }, [onDone]);
+
   useEffect(() => {
     const total = reduce ? 600 : 1600 + 2 * 500 + 900; // last reel delay + spin + hold
-    const t = setTimeout(onDone, total);
+    const t = setTimeout(() => onDoneRef.current(), total);
     return () => clearTimeout(t);
-  }, [reduce, onDone]);
+  }, [reduce]);
 
   return (
     <div className="slot-wrap">

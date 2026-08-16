@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import { getRole, type Player } from "@musicphone/shared";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
@@ -51,16 +51,25 @@ export function WheelOfFortune({
   const m = Math.max(1, selectedRoles.length);
   const sectionDeg = 360 / m;
 
+  // Read `onDone` through a ref. The parent rebuilds that closure on every
+  // render, so depending on it directly restarted the spin each time an
+  // unrelated snapshot arrived — a lobby where someone kept toggling ready
+  // could loop the draft forever.
+  const onDoneRef = useRef(onDone);
+  useEffect(() => {
+    onDoneRef.current = onDone;
+  }, [onDone]);
+
   useEffect(() => {
     const spinMs = reduce ? 0 : 3800;
     const holdMs = reduce ? 600 : 1500;
     const t1 = setTimeout(() => setSettled(true), spinMs);
-    const t2 = setTimeout(onDone, spinMs + holdMs);
+    const t2 = setTimeout(() => onDoneRef.current(), spinMs + holdMs);
     return () => {
       clearTimeout(t1);
       clearTimeout(t2);
     };
-  }, [reduce, onDone]);
+  }, [reduce]);
 
   const targetRotation = reduce ? wheelOffsetDeg : SPINS * 360 + wheelOffsetDeg;
 
