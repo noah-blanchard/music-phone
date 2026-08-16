@@ -52,6 +52,13 @@ jobs:
       - name: Test
         run: bun run test
 
+      # A production build is the only place the client's fail-fast config check
+      # runs, and the only place a Next-specific build error can surface.
+      - name: Build the web app
+        run: bun run build
+        env:
+          NEXT_PUBLIC_SERVER_URL: https://ci.example
+
       # The Redis half of the store contract is the point of the service above;
       # if it skipped, the service is misconfigured and CI should say so.
       - name: Confirm the Redis store suite actually ran
