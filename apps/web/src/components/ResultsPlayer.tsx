@@ -157,7 +157,8 @@ function ActiveSong({
   const toggleMute = (i: number) =>
     setMuted((prev) => {
       const next = new Set(prev);
-      next.has(i) ? next.delete(i) : next.add(i);
+      if (next.has(i)) next.delete(i);
+      else next.add(i);
       return next;
     });
 
@@ -192,7 +193,8 @@ function ActiveSong({
             className="hw-btn hw-icon hw-btn--primary"
             onClick={() => {
               uiClick();
-              playing ? setReveal(index, revealed, false) : setReveal(index, Math.max(revealed, 1), true);
+              if (playing) setReveal(index, revealed, false);
+              else setReveal(index, Math.max(revealed, 1), true);
             }}
           >
             {playing ? "■" : "▶"}
