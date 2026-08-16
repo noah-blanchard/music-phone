@@ -1,0 +1,8 @@
+# Revisions that are pure formatting/mechanical churn and should be skipped
+# when tracing authorship.
+#
+# Enable locally with:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+#
+# style: format the codebase with Prettier
+ce861c792710681d2b60b9d3389cdb57b3dd07ca
