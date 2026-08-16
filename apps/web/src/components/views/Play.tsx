@@ -31,7 +31,6 @@ export function Play() {
   const rerollInstrument = useGameStore((s) => s.rerollInstrument);
   const pitchUnlocked = useGameStore((s) => s.pitchUnlocked);
   const setPitchUnlocked = useGameStore((s) => s.setPitchUnlocked);
-  const submitted = useGameStore((s) => s.submitted);
   const draft = useGameStore((s) => s.draft);
   const setDraft = useGameStore((s) => s.setDraft);
   const clearDraft = useGameStore((s) => s.clearDraft);
@@ -41,6 +40,9 @@ export function Play() {
 
   const { config } = snapshot;
   const readyCount = snapshot.players.filter((p) => snapshot.ready[p.id]).length;
+  // Derived from the room rather than tracked locally, so it stays right across
+  // a reconnect instead of resetting to "not submitted".
+  const submitted = snapshot.ready[snapshot.selfId] ?? false;
 
   const role = currentRole ?? getRole(snapshot.assignments[snapshot.selfId]);
   if (!role || !currentSong) return <div className="center muted">Dealing your kit…</div>;

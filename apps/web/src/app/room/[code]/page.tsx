@@ -8,6 +8,7 @@ import { loadCredentials, rememberCredentials, savedNickname } from "@/lib/sessi
 import { Lobby } from "@/components/views/Lobby";
 import { Play } from "@/components/views/Play";
 import { ResultsPlayer } from "@/components/ResultsPlayer";
+import { ConnectionStatus } from "@/components/ConnectionStatus";
 
 export default function RoomPage() {
   const params = useParams();
@@ -49,7 +50,7 @@ function JoinGate({ code, onJoined }: { code: string; onJoined: (id: string) => 
 
   return (
     <div className="center">
-      <div className="card stack" style={{ width: 360 }}>
+      <div className="panel stack" style={{ width: 360 }}>
         <h2>
           Join room <span className="code-pill">{code}</span>
         </h2>
@@ -57,7 +58,7 @@ function JoinGate({ code, onJoined }: { code: string; onJoined: (id: string) => 
           <span>Nickname</span>
           <input value={nickname} maxLength={20} onChange={(e) => setNickname(e.target.value)} />
         </label>
-        <button className="btn primary" disabled={busy} onClick={join}>
+        <button className="hw-btn hw-btn--primary" disabled={busy} onClick={join}>
           Join
         </button>
         {error && <p className="error">{error}</p>}
@@ -67,33 +68,56 @@ function JoinGate({ code, onJoined }: { code: string; onJoined: (id: string) => 
 }
 
 function RoomConnected({ code, playerId }: { code: string; playerId: string }) {
+  // `connect` and `disconnect` are stable zustand actions, so this effect runs
+  // once per room/player rather than on every store change.
   const connect = useGameStore((s) => s.connect);
   const disconnect = useGameStore((s) => s.disconnect);
   const snapshot = useGameStore((s) => s.snapshot);
-  const connected = useGameStore((s) => s.connected);
+  const status = useGameStore((s) => s.status);
+  const error = useGameStore((s) => s.error);
 
   useEffect(() => {
     connect(code, playerId);
     return () => disconnect();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [code, playerId]);
+  }, [code, playerId, connect, disconnect]);
 
+  // Nothing to show yet: either still arriving, or the room is gone for good.
   if (!snapshot) {
-    return <div className="center muted">{connected ? "Loading room…" : "Connecting…"}</div>;
+    if (status === "ended") {
+      return (
+        <div className="center">
+          <div className="panel stack" style={{ width: 380, textAlign: "center" }}>
+            <h2>This room has ended</h2>
+            <p className="muted">
+              {error ??
+                "The game is no longer running. It may have finished, or the server restarted."}
+            </p>
+            <a className="hw-btn hw-btn--primary" href="/">
+              Back to the start
+            </a>
+          </div>
+        </div>
+      );
+    }
+    return (
+      <div className="center muted">
+        {status === "reconnecting" ? "Reconnecting…" : "Connecting…"}
+      </div>
+    );
   }
 
-  switch (snapshot.phase) {
-    case "lobby":
-      return <Lobby />;
-    case "playing":
-      return <Play />;
-    case "results":
-      return (
+  return (
+    <>
+      <ConnectionStatus />
+      {snapshot.phase === "lobby" && <Lobby />}
+      {snapshot.phase === "playing" && <Play />}
+      {snapshot.phase === "results" && (
         <ResultsPlayer
           melodies={snapshot.melodies}
           config={snapshot.config}
           roomCode={snapshot.code}
         />
-      );
-  }
+      )}
+    </>
+  );
 }
