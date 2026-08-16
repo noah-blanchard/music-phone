@@ -115,11 +115,6 @@ export function getRole(roleId: string | undefined): Role | undefined {
   return LAYER_ROLES.find((r) => r.id === roleId);
 }
 
-/** The role of a segment: explicit `roleId`, else derived from its order. */
-export function roleOfSegment(order: number, roleId?: string): Role | undefined {
-  return getRole(roleId) ?? LAYER_ROLES[order];
-}
-
 function isObject(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
@@ -165,7 +160,7 @@ function validateDrums(notes: unknown, config: GameConfig, max = 512): Note[] {
 /** Read-only prior layers shown per the host's visibility setting. */
 function buildLayerContext(song: Melody, config: GameConfig): Layer[] {
   const toLayer = (s: Melody["segments"][number]): Layer => ({
-    roleId: roleOfSegment(s.order, s.roleId)?.id ?? s.roleId ?? "",
+    roleId: s.roleId ?? "",
     instrumentId: s.instrumentId,
     notes: s.notes,
   });
@@ -205,7 +200,6 @@ export const layersMode: GameMode = {
   totalRounds: (playerCount) => playerCount,
   assign: rotate,
   buildContext: (song, _round, config) => buildLayerContext(song, config),
-  turnSteps: (config) => loopSteps(config),
   validateTurn: (notes, config, role) =>
     role.editor === "drum-grid" ? validateDrums(notes, config) : validatePitched(notes, config),
 };

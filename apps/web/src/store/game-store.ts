@@ -3,7 +3,6 @@ import type {
   ClientMessage,
   GameConfig,
   Layer,
-  Melody,
   Note,
   Role,
   RoomSnapshot,
@@ -51,8 +50,6 @@ interface GameState {
   pitchUnlocked: boolean;
   /** Local, editable notes for the current turn. */
   draft: Note[];
-  /** Finished songs, populated on game:finished. */
-  finishedMelodies: Melody[];
   status: ConnectionStatus;
   connected: boolean;
   error: string | null;
@@ -103,7 +100,6 @@ export const useGameStore = create<GameState>((set, get) => ({
   rerollsLeft: 0,
   pitchUnlocked: false,
   draft: [],
-  finishedMelodies: [],
   status: "connecting",
   connected: false,
   error: null,
@@ -180,7 +176,6 @@ export const useGameStore = create<GameState>((set, get) => ({
       contextLayers: [],
       currentRole: null,
       currentSong: null,
-      finishedMelodies: [],
     });
   },
 
@@ -220,7 +215,6 @@ function dispatch(
   switch (msg.type) {
     case "room:snapshot":
       set({ snapshot: msg.room });
-      if (msg.room.phase === "results") set({ finishedMelodies: msg.room.melodies });
       break;
 
     case "round:started":
@@ -246,11 +240,10 @@ function dispatch(
       set({ selectedInstrument: msg.instrumentId, rerollsLeft: msg.rerollsLeft });
       break;
 
+    // Both are announcements: the snapshot that follows carries the state the
+    // views actually render from.
     case "round:ended":
-      break;
-
     case "game:finished":
-      set({ finishedMelodies: msg.melodies });
       break;
 
     case "error":

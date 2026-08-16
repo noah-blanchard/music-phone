@@ -1,13 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  LAYER_ROLES,
-  MAX_DRUM_VOICES,
-  assignWheel,
-  getRole,
-  layersMode,
-  roleOfSegment,
-  rotate,
-} from "./layers";
+import { LAYER_ROLES, MAX_DRUM_VOICES, assignWheel, getRole, layersMode, rotate } from "./layers";
 import {
   DEFAULT_CONFIG,
   MAX_PLAYERS,
@@ -51,21 +43,6 @@ describe("role table", () => {
     expect(getRole("drums")).toBe(LAYER_ROLES[0]);
     expect(getRole("nope")).toBeUndefined();
     expect(getRole(undefined)).toBeUndefined();
-  });
-});
-
-describe("roleOfSegment", () => {
-  it("prefers the explicit roleId", () => {
-    expect(roleOfSegment(0, "bass")?.id).toBe("bass");
-  });
-
-  it("falls back to the role at the segment's order when roleId is absent", () => {
-    expect(roleOfSegment(1, undefined)?.id).toBe(LAYER_ROLES[1]!.id);
-  });
-
-  it("returns undefined when neither resolves", () => {
-    expect(roleOfSegment(999, undefined)).toBeUndefined();
-    expect(roleOfSegment(999, "not-a-role")).toBeUndefined();
   });
 });
 

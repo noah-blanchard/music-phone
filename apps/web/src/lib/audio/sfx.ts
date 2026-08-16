@@ -41,12 +41,6 @@ export function uiClick(): void {
   getNoise().triggerAttackRelease(0.02);
 }
 
-/** Soft high blip for hovers / selections. */
-export function uiHover(): void {
-  if (!ready()) return;
-  getSynth().triggerAttackRelease("C6", 0.02, undefined, 0.3);
-}
-
 /** Confirmation chirp (submit, start). */
 export function uiConfirm(): void {
   if (!ready()) return;

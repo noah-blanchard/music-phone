@@ -60,8 +60,3 @@ export function getDrumKitVoices(kitId: string | undefined): DrumVoice[] {
 export function getDrumKitLabel(kitId: string): string {
   return kitById.get(kitId)?.label ?? kitId;
 }
-
-export function disposeDrumKits(): void {
-  for (const voices of live.values()) for (const v of voices) v.dispose();
-  live.clear();
-}

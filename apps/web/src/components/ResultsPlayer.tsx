@@ -2,9 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
-import { getRole, roleOfSegment, type GameConfig, type Melody } from "@musicphone/shared";
+import { getRole, loopSteps, type GameConfig, type Melody } from "@musicphone/shared";
 import { ensureAudio, playLayers, type PlayHandle } from "@/lib/audio/engine";
-import { loopLength, stackLayers } from "@/lib/audio/schedule";
+import { stackLayers } from "@/lib/audio/schedule";
 import { uiClick } from "@/lib/audio/sfx";
 import { useGameStore } from "@/store/game-store";
 
@@ -149,7 +149,7 @@ function ActiveSong({
       await ensureAudio();
       if (cancelled) return;
       const layers = stackLayers(song, revealed).filter((_, i) => !muted.has(i));
-      handleRef.current = playLayers(layers, song.bpm, loopLength(config), {
+      handleRef.current = playLayers(layers, song.bpm, loopSteps(config), {
         loop: true,
         onStep: setStep,
         onStopped: () => {
@@ -242,7 +242,7 @@ function ActiveSong({
 
       <div className="strip" style={{ marginTop: 10 }}>
         {song.segments.map((seg, si) => {
-          const role = roleOfSegment(seg.order, seg.roleId) ?? getRole(seg.roleId);
+          const role = getRole(seg.roleId);
           const shown = si < revealed;
           const color = shown ? (role?.color ?? "#888") : "#2a2d35";
           const isMuted = muted.has(si);
@@ -285,7 +285,7 @@ function FreeSong({ song, index, config }: { song: Melody; index: number; config
     setPlaying(true);
     // Starting this song stops any other, so the one that loses the transport
     // has to hear about it — otherwise its button sits on "■" playing nothing.
-    handleRef.current = playLayers(stackLayers(song), song.bpm, loopLength(config), {
+    handleRef.current = playLayers(stackLayers(song), song.bpm, loopSteps(config), {
       loop: true,
       onStopped: () => {
         handleRef.current = null;
@@ -303,7 +303,7 @@ function FreeSong({ song, index, config }: { song: Melody; index: number; config
       <span className="result-title">Song {index + 1}</span>
       <div className="strip">
         {song.segments.map((seg, si) => {
-          const role = roleOfSegment(seg.order, seg.roleId) ?? getRole(seg.roleId);
+          const role = getRole(seg.roleId);
           return (
             <div
               key={si}

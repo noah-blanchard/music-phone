@@ -54,8 +54,6 @@ export interface GameMode {
   assign(playerIndex: number, round: number, n: number): number;
   /** Read-only prior layers for the player editing `song` this round. */
   buildContext(song: Melody, round: number, config: GameConfig): Layer[];
-  /** Number of editable steps in a turn for this mode. */
-  turnSteps(config: GameConfig): number;
   /** Validate + normalize a submitted turn for the player's role/geometry. */
   validateTurn(notes: unknown, config: GameConfig, role: Role): Note[];
 }

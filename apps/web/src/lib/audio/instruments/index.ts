@@ -51,9 +51,3 @@ export function getInstrument(id: string): Instrument {
 export function getInstrumentLabel(id: string): string {
   return byId.get(id)?.label ?? id;
 }
-
-/** Dispose all created instruments (e.g. on teardown). */
-export function disposeInstruments(): void {
-  for (const inst of live.values()) inst.dispose();
-  live.clear();
-}
