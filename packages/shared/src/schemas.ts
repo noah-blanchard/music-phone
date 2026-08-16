@@ -32,6 +32,7 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
   switch (raw.type) {
     case "game:start":
     case "room:leave":
+    case "turn:reroll":
       return { type: raw.type };
     case "player:ready":
       return typeof raw.ready === "boolean" ? { type: "player:ready", ready: raw.ready } : null;
@@ -41,11 +42,19 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
         : null;
     case "turn:autosave":
       return Array.isArray(raw.notes)
-        ? { type: "turn:autosave", notes: raw.notes as Note[], instrumentId: cleanInstrumentId(raw.instrumentId) }
+        ? {
+            type: "turn:autosave",
+            notes: raw.notes as Note[],
+            instrumentId: cleanInstrumentId(raw.instrumentId),
+          }
         : null;
     case "turn:submit":
       return Array.isArray(raw.notes)
-        ? { type: "turn:submit", notes: raw.notes as Note[], instrumentId: cleanInstrumentId(raw.instrumentId) }
+        ? {
+            type: "turn:submit",
+            notes: raw.notes as Note[],
+            instrumentId: cleanInstrumentId(raw.instrumentId),
+          }
         : null;
     case "reveal:update":
       return isFiniteInt(raw.activeSong) &&

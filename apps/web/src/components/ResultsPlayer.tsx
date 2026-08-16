@@ -2,9 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
-import { getRole, roleOfSegment, type GameConfig, type Melody } from "@musicphone/shared";
+import { getRole, loopSteps, type GameConfig, type Melody } from "@musicphone/shared";
 import { ensureAudio, playLayers, type PlayHandle } from "@/lib/audio/engine";
-import { loopLength, stackLayers } from "@/lib/audio/schedule";
+import { stackLayers } from "@/lib/audio/schedule";
 import { uiClick } from "@/lib/audio/sfx";
 import { useGameStore } from "@/store/game-store";
 
@@ -56,6 +56,9 @@ export function ResultsPlayer({ melodies, config, roomCode }: Props) {
 function SequentialReveal({ melodies, config }: { melodies: Melody[]; config: GameConfig }) {
   const reveal = useGameStore((s) => s.snapshot?.reveal);
   const selfId = useGameStore((s) => s.snapshot?.selfId);
+  // The server decides who may drive: normally the song's author, falling back
+  // to the host and then to anyone present if they have gone.
+  const canControl = useGameStore((s) => s.snapshot?.canControlReveal ?? false);
   const setReveal = useGameStore((s) => s.setReveal);
 
   const activeSong = reveal?.activeSong ?? 0;
@@ -98,6 +101,7 @@ function SequentialReveal({ melodies, config }: { melodies: Melody[]; config: Ga
         last={activeSong === melodies.length - 1}
         config={config}
         selfId={selfId}
+        canControl={canControl}
         revealed={revealed}
         playing={playing}
         setReveal={setReveal}
@@ -112,6 +116,7 @@ function ActiveSong({
   last,
   config,
   selfId,
+  canControl,
   revealed,
   playing,
   setReveal,
@@ -121,6 +126,8 @@ function ActiveSong({
   last: boolean;
   config: GameConfig;
   selfId: string | undefined;
+  /** Whether this player may drive the reveal, as decided by the server. */
+  canControl: boolean;
   revealed: number;
   playing: boolean;
   setReveal: (activeSong: number, revealedLayers: number, playing: boolean) => void;
@@ -142,7 +149,14 @@ function ActiveSong({
       await ensureAudio();
       if (cancelled) return;
       const layers = stackLayers(song, revealed).filter((_, i) => !muted.has(i));
-      handleRef.current = playLayers(layers, song.bpm, loopLength(config), { loop: true, onStep: setStep });
+      handleRef.current = playLayers(layers, song.bpm, loopSteps(config), {
+        loop: true,
+        onStep: setStep,
+        onStopped: () => {
+          handleRef.current = null;
+          setStep(null);
+        },
+      });
     })();
     return () => {
       cancelled = true;
@@ -157,7 +171,8 @@ function ActiveSong({
   const toggleMute = (i: number) =>
     setMuted((prev) => {
       const next = new Set(prev);
-      next.has(i) ? next.delete(i) : next.add(i);
+      if (next.has(i)) next.delete(i);
+      else next.add(i);
       return next;
     });
 
@@ -179,6 +194,11 @@ function ActiveSong({
           <span className="chip" style={{ marginLeft: "auto" }}>
             you present
           </span>
+        ) : canControl ? (
+          // The author has left, so someone else is keeping things moving.
+          <span className="chip" style={{ marginLeft: "auto" }}>
+            you have the controls
+          </span>
         ) : (
           <span className="chip" style={{ marginLeft: "auto" }}>
             {playing ? "● live" : "○ paused"}
@@ -186,21 +206,35 @@ function ActiveSong({
         )}
       </div>
 
-      {isPresenter && (
+      {canControl && (
         <div className="row" style={{ gap: 8, marginTop: 8 }}>
           <button
             className="hw-btn hw-icon hw-btn--primary"
             onClick={() => {
               uiClick();
-              playing ? setReveal(index, revealed, false) : setReveal(index, Math.max(revealed, 1), true);
+              if (playing) setReveal(index, revealed, false);
+              else setReveal(index, Math.max(revealed, 1), true);
             }}
           >
             {playing ? "■" : "▶"}
           </button>
-          <button className="hw-btn" onClick={() => { uiClick(); setReveal(index, Math.min(revealed + 1, total), true); }} disabled={revealed >= total}>
+          <button
+            className="hw-btn"
+            onClick={() => {
+              uiClick();
+              setReveal(index, Math.min(revealed + 1, total), true);
+            }}
+            disabled={revealed >= total}
+          >
             Reveal next layer
           </button>
-          <button className="hw-btn hw-btn--ghost" onClick={() => { uiClick(); setReveal(index + 1, 0, false); }}>
+          <button
+            className="hw-btn hw-btn--ghost"
+            onClick={() => {
+              uiClick();
+              setReveal(index + 1, 0, false);
+            }}
+          >
             {last ? "Finish ▸" : "Next song ▸"}
           </button>
         </div>
@@ -208,9 +242,9 @@ function ActiveSong({
 
       <div className="strip" style={{ marginTop: 10 }}>
         {song.segments.map((seg, si) => {
-          const role = roleOfSegment(seg.order, seg.roleId) ?? getRole(seg.roleId);
+          const role = getRole(seg.roleId);
           const shown = si < revealed;
-          const color = shown ? role?.color ?? "#888" : "#2a2d35";
+          const color = shown ? (role?.color ?? "#888") : "#2a2d35";
           const isMuted = muted.has(si);
           return (
             <button
@@ -219,7 +253,11 @@ function ActiveSong({
               style={{ ["--sc" as string]: color }}
               disabled={!shown}
               onClick={() => toggleMute(si)}
-              title={shown ? `${role?.name ?? "Layer"} — ${seg.authorName}${isMuted ? " (muted)" : ""}` : "Hidden"}
+              title={
+                shown
+                  ? `${role?.name ?? "Layer"} — ${seg.authorName}${isMuted ? " (muted)" : ""}`
+                  : "Hidden"
+              }
             >
               {shown ? `${role?.name ?? "Layer"} · ${seg.authorName}` : "?"}
             </button>
@@ -245,7 +283,15 @@ function FreeSong({ song, index, config }: { song: Melody; index: number; config
     uiClick();
     if (playing) return stop();
     setPlaying(true);
-    handleRef.current = playLayers(stackLayers(song), song.bpm, loopLength(config), { loop: true });
+    // Starting this song stops any other, so the one that loses the transport
+    // has to hear about it — otherwise its button sits on "■" playing nothing.
+    handleRef.current = playLayers(stackLayers(song), song.bpm, loopSteps(config), {
+      loop: true,
+      onStopped: () => {
+        handleRef.current = null;
+        setPlaying(false);
+      },
+    });
   };
   useEffect(() => () => handleRef.current?.stop(), []);
 
@@ -257,7 +303,7 @@ function FreeSong({ song, index, config }: { song: Melody; index: number; config
       <span className="result-title">Song {index + 1}</span>
       <div className="strip">
         {song.segments.map((seg, si) => {
-          const role = roleOfSegment(seg.order, seg.roleId) ?? getRole(seg.roleId);
+          const role = getRole(seg.roleId);
           return (
             <div
               key={si}

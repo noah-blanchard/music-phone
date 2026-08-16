@@ -1,104 +1,57 @@
-import { Elysia, t } from "elysia";
-import { cors } from "@elysiajs/cors";
-import { MAX_PLAYERS } from "@musicphone/shared";
-import { RoomManager } from "./game/room-store";
-import { handleClientMessage } from "./ws/handlers";
+import { buildApp, type App } from "./app";
+import { loadConfig } from "./config";
 
-const manager = new RoomManager();
+const config = loadConfig();
+const { app, parts } = buildApp(config);
 
-const rawOrigin = process.env.WEB_ORIGIN ?? "*";
-const WEB_ORIGIN = rawOrigin === "*" ? "*" : rawOrigin.replace(/\/$/, "");
-const PORT = Number(process.env.PORT ?? 3001);
+if (config.allowAnyOrigin) {
+  console.warn(
+    "WEB_ORIGIN is unset, so any origin may call this server. Set it to your web app's URL in production.",
+  );
+}
+if (!config.redisUrl) {
+  console.warn(
+    "REDIS_URL is unset: rooms are held in memory and every game is lost on restart. Set it in production.",
+  );
+}
 
-console.log(`🚀 Starting MusicPhone server with WEB_ORIGIN=${WEB_ORIGIN} on port ${PORT}...`);
+/**
+ * Rooms may have outlived the previous process. Nobody's socket survived it, so
+ * clear the stale presence flags first, then re-arm the round clocks — deadlines
+ * are absolute, so an interrupted round ends when it was always going to.
+ */
+if (config.redisUrl) {
+  try {
+    await parts.service.clearStalePresence();
+    const restored = await parts.service.restoreTimers();
+    if (restored > 0) console.log(`Resumed ${restored} game(s) in progress`);
+  } catch (error) {
+    console.error("Could not restore rooms from Redis:", error);
+  }
+}
 
-const app = new Elysia()
-  .use(cors({ origin: WEB_ORIGIN, credentials: false }))
-  .get("/health", () => ({ ok: true, service: "musicphone-server" }))
+app.listen(config.port);
 
-  // Create a room. The caller becomes the host; returns the join code + playerId.
-  .post(
-    "/rooms",
-    ({ body }) => {
-      const { room, playerId } = manager.create(body.nickname, body.config);
-      return { code: room.code, playerId };
-    },
-    {
-      body: t.Object({
-        nickname: t.String({ minLength: 1, maxLength: 20 }),
-        config: t.Optional(
-          t.Object({
-            barsPerSong: t.Optional(t.Number()),
-            contextVisibility: t.Optional(
-              t.Union([t.Literal("previous"), t.Literal("all"), t.Literal("blind")]),
-            ),
-            selectedRoles: t.Optional(t.Array(t.String())),
-            roundDurationSec: t.Optional(t.Number()),
-          }),
-        ),
-      }),
-    },
-  )
+console.log(
+  `MusicPhone server listening on http://localhost:${config.port} ` +
+    `(origin: ${config.webOrigin}, storage: ${config.redisUrl ? "redis" : "memory"})`,
+);
 
-  // Join an existing room by code while it is still in the lobby.
-  .post(
-    "/rooms/:code/join",
-    ({ params, body, set }) => {
-      const result = manager.join(params.code.toUpperCase(), body.nickname);
-      if ("error" in result) {
-        set.status = 400;
-        return { error: result.error };
-      }
-      return { code: result.room.code, playerId: result.playerId };
-    },
-    {
-      params: t.Object({ code: t.String() }),
-      body: t.Object({ nickname: t.String({ minLength: 1, maxLength: 20 }) }),
-    },
-  )
+/**
+ * Render restarts the process on deploy and after idle spin-down. Shut down
+ * cleanly so the process exits promptly rather than being killed.
+ */
+let shuttingDown = false;
+for (const signal of ["SIGTERM", "SIGINT"] as const) {
+  process.on(signal, () => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log(`${signal} received, shutting down`);
+    parts.scheduler.cancelAll();
+    void parts.redis?.quit();
+    void app.stop();
+  });
+}
 
-  // Lightweight existence/availability probe used by the join screen.
-  .get("/rooms/:code", ({ params, set }) => {
-    const room = manager.get(params.code.toUpperCase());
-    if (!room) {
-      set.status = 404;
-      return { error: "Room not found" };
-    }
-    return {
-      code: room.code,
-      phase: room.phase,
-      players: room.players.length,
-      max: MAX_PLAYERS,
-    };
-  })
-
-  // Realtime gameplay channel. Identity is carried in the query string
-  // (?code=ABCD&playerId=uuid) so reconnects re-attach to the same player.
-  .ws("/ws", {
-    query: t.Object({ code: t.String(), playerId: t.String() }),
-    open(ws) {
-      const { code, playerId } = ws.data.query;
-      const ok = manager.connect(code.toUpperCase(), playerId, (msg) => ws.send(JSON.stringify(msg)));
-      if (!ok) {
-        ws.send(JSON.stringify({ type: "error", code: "join_failed", message: "Unknown room or player" }));
-        ws.close();
-        return;
-      }
-      manager.broadcastSnapshot(code.toUpperCase());
-      manager.sync(code.toUpperCase(), playerId);
-    },
-    message(ws, message) {
-      const { code, playerId } = ws.data.query;
-      handleClientMessage(manager, code.toUpperCase(), playerId, message);
-    },
-    close(ws) {
-      const { code, playerId } = ws.data.query;
-      manager.handleClose(code.toUpperCase(), playerId);
-    },
-  })
-  .listen(PORT);
-
-console.log(`🎵 MusicPhone server listening on http://localhost:${PORT}`);
-
-export type App = typeof app;
+export type { App };
 export { app };

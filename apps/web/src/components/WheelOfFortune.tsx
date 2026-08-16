@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import { getRole, type Player } from "@musicphone/shared";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
@@ -38,22 +38,38 @@ function shortName(id: string) {
  * The dial spins to the server's `wheelOffsetDeg`; when it stops, each avatar
  * reveals the kit it landed on.
  */
-export function WheelOfFortune({ players, selectedRoles, assignments, wheelOffsetDeg, selfId, onDone }: Props) {
+export function WheelOfFortune({
+  players,
+  selectedRoles,
+  assignments,
+  wheelOffsetDeg,
+  selfId,
+  onDone,
+}: Props) {
   const reduce = !!useReducedMotion();
   const [settled, setSettled] = useState(reduce);
   const m = Math.max(1, selectedRoles.length);
   const sectionDeg = 360 / m;
 
+  // Read `onDone` through a ref. The parent rebuilds that closure on every
+  // render, so depending on it directly restarted the spin each time an
+  // unrelated snapshot arrived — a lobby where someone kept toggling ready
+  // could loop the draft forever.
+  const onDoneRef = useRef(onDone);
+  useEffect(() => {
+    onDoneRef.current = onDone;
+  }, [onDone]);
+
   useEffect(() => {
     const spinMs = reduce ? 0 : 3800;
     const holdMs = reduce ? 600 : 1500;
     const t1 = setTimeout(() => setSettled(true), spinMs);
-    const t2 = setTimeout(onDone, spinMs + holdMs);
+    const t2 = setTimeout(() => onDoneRef.current(), spinMs + holdMs);
     return () => {
       clearTimeout(t1);
       clearTimeout(t2);
     };
-  }, [reduce, onDone]);
+  }, [reduce]);
 
   const targetRotation = reduce ? wheelOffsetDeg : SPINS * 360 + wheelOffsetDeg;
 
@@ -90,7 +106,14 @@ export function WheelOfFortune({ players, selectedRoles, assignments, wheelOffse
             style={{ transformOrigin: `${C}px ${C}px` }}
           >
             {selectedRoles.map((id, k) => (
-              <path key={`w-${id}`} d={wedge(k)} fill={getRole(id)?.color ?? "#555"} fillOpacity={0.82} stroke="#0a0b0e" strokeWidth={1.5} />
+              <path
+                key={`w-${id}`}
+                d={wedge(k)}
+                fill={getRole(id)?.color ?? "#555"}
+                fillOpacity={0.82}
+                stroke="#0a0b0e"
+                strokeWidth={1.5}
+              />
             ))}
             {/* Centre vignette for depth */}
             <circle cx={C} cy={C} r={WHEEL_R} fill="url(#wheelVig)" pointerEvents="none" />
@@ -121,11 +144,29 @@ export function WheelOfFortune({ players, selectedRoles, assignments, wheelOffse
           <circle cx={C} cy={C} r={WHEEL_R + 4} fill="none" stroke="#0a0b0e" strokeWidth={3} />
 
           {/* Pointer at top */}
-          <polygon points={`${C - 11},${C - WHEEL_R - 14} ${C + 11},${C - WHEEL_R - 14} ${C},${C - WHEEL_R + 6}`} fill="var(--amber)" stroke="#0a0b0e" strokeWidth={1} />
+          <polygon
+            points={`${C - 11},${C - WHEEL_R - 14} ${C + 11},${C - WHEEL_R - 14} ${C},${C - WHEEL_R + 6}`}
+            fill="var(--amber)"
+            stroke="#0a0b0e"
+            strokeWidth={1}
+          />
 
           {/* Hub */}
-          <circle cx={C} cy={C} r={26} fill="url(#hubMetal)" stroke="var(--amber)" strokeWidth={2} />
-          <text x={C} y={C} textAnchor="middle" dominantBaseline="central" className="wheel-hub-text">
+          <circle
+            cx={C}
+            cy={C}
+            r={26}
+            fill="url(#hubMetal)"
+            stroke="var(--amber)"
+            strokeWidth={2}
+          />
+          <text
+            x={C}
+            y={C}
+            textAnchor="middle"
+            dominantBaseline="central"
+            className="wheel-hub-text"
+          >
             {settled ? "✓" : "♪"}
           </text>
         </svg>
@@ -137,7 +178,10 @@ export function WheelOfFortune({ players, selectedRoles, assignments, wheelOffse
           const isSelf = p.id === selfId;
           return (
             <div key={p.id} className="wheel-avatar" style={{ left: pos.x - 22, top: pos.y - 22 }}>
-              <motion.div animate={settled && isSelf ? { scale: [1, 1.18, 1] } : {}} transition={{ duration: 0.5 }}>
+              <motion.div
+                animate={settled && isSelf ? { scale: [1, 1.18, 1] } : {}}
+                transition={{ duration: 0.5 }}
+              >
                 <PlayerAvatar id={p.id} name={p.name} dim={!p.connected} />
               </motion.div>
               {settled && role && (
@@ -158,7 +202,9 @@ export function WheelOfFortune({ players, selectedRoles, assignments, wheelOffse
       {settled && (
         <motion.div className="wheel-self" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
           You play the{" "}
-          <span style={{ color: getRole(assignments[selfId])?.color }}>{getRole(assignments[selfId])?.name ?? "—"}</span>{" "}
+          <span style={{ color: getRole(assignments[selfId])?.color }}>
+            {getRole(assignments[selfId])?.name ?? "—"}
+          </span>{" "}
           on every song
         </motion.div>
       )}

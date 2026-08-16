@@ -1,0 +1,13 @@
+node_modules
+**/node_modules
+# The web app is deployed on Vercel; only its manifest is needed here, so that
+# `bun install --frozen-lockfile` sees the same workspace set as the lockfile.
+apps/web/*
+!apps/web/package.json
+.git
+.github
+dist
+**/dist
+.next
+**/.next
+*.md

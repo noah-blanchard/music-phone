@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { createPlayhead } from "@/lib/playhead";
 import { SCALE_LABELS, getRole, loopSteps, noteLabel, type Layer } from "@musicphone/shared";
 import { useGameStore } from "@/store/game-store";
 import { PianoRollEditor } from "@/components/editors/PianoRollEditor";
@@ -31,16 +32,19 @@ export function Play() {
   const rerollInstrument = useGameStore((s) => s.rerollInstrument);
   const pitchUnlocked = useGameStore((s) => s.pitchUnlocked);
   const setPitchUnlocked = useGameStore((s) => s.setPitchUnlocked);
-  const submitted = useGameStore((s) => s.submitted);
   const draft = useGameStore((s) => s.draft);
   const setDraft = useGameStore((s) => s.setDraft);
   const clearDraft = useGameStore((s) => s.clearDraft);
   const submitTurn = useGameStore((s) => s.submitTurn);
 
-  const [playStep, setPlayStep] = useState<number | null>(null);
+  // One channel per mounted view; the editors follow it without re-rendering.
+  const [playhead] = useState(createPlayhead);
 
   const { config } = snapshot;
   const readyCount = snapshot.players.filter((p) => snapshot.ready[p.id]).length;
+  // Derived from the room rather than tracked locally, so it stays right across
+  // a reconnect instead of resetting to "not submitted".
+  const submitted = snapshot.ready[snapshot.selfId] ?? false;
 
   const role = currentRole ?? getRole(snapshot.assignments[snapshot.selfId]);
   if (!role || !currentSong) return <div className="center muted">Dealing your kit…</div>;
@@ -52,8 +56,13 @@ export function Play() {
   const showDrums = isDrum || hasDrumCtx;
 
   const totalSteps = loopSteps(config);
-  const playLayersList: Layer[] = [...contextLayers, { roleId: role.id, instrumentId: selectedInstrument, notes: draft }];
-  const soundLabel = isDrum ? getDrumKitLabel(selectedInstrument) : getInstrumentLabel(selectedInstrument);
+  const playLayersList: Layer[] = [
+    ...contextLayers,
+    { roleId: role.id, instrumentId: selectedInstrument, notes: draft },
+  ];
+  const soundLabel = isDrum
+    ? getDrumKitLabel(selectedInstrument)
+    : getInstrumentLabel(selectedInstrument);
 
   return (
     <div className="fill">
@@ -79,7 +88,8 @@ export function Play() {
           </h2>
           <span className="muted" style={{ fontSize: 12 }}>
             {noteLabel(currentSong.root).replace(/\d+$/, "")} {SCALE_LABELS[currentSong.scale]} ·{" "}
-            {currentSong.bpm} BPM · {config.barsPerSong}-bar loop · {CONTEXT_HINT[config.contextVisibility]}
+            {currentSong.bpm} BPM · {config.barsPerSong}-bar loop ·{" "}
+            {CONTEXT_HINT[config.contextVisibility]}
           </span>
         </div>
 
@@ -96,7 +106,7 @@ export function Play() {
                 draft={isDrum ? [] : draft}
                 contextLayers={contextLayers}
                 onChange={isDrum ? noop : setDraft}
-                playStep={playStep}
+                playhead={playhead}
                 readOnly={isDrum}
               />
             </div>
@@ -110,7 +120,7 @@ export function Play() {
                 draft={isDrum ? draft : []}
                 contextLayers={contextLayers}
                 onChange={isDrum ? setDraft : noop}
-                playStep={playStep}
+                playhead={playhead}
                 readOnly={!isDrum}
               />
             </div>
@@ -122,7 +132,10 @@ export function Play() {
         <div className="dock-group" style={{ flexDirection: "column", alignItems: "flex-start" }}>
           <span className="dock-label">Sound</span>
           <div className="row" style={{ gap: 8 }}>
-            <span className="chip" style={{ ["--sc" as string]: role.color, borderColor: role.color }}>
+            <span
+              className="chip"
+              style={{ ["--sc" as string]: role.color, borderColor: role.color }}
+            >
               {soundLabel}
             </span>
             <button
@@ -146,7 +159,7 @@ export function Play() {
               bpm={currentSong.bpm}
               totalSteps={totalSteps}
               layers={playLayersList}
-              onStep={setPlayStep}
+              onStep={playhead.set}
             />
             <button
               className="hw-btn hw-btn--ghost"

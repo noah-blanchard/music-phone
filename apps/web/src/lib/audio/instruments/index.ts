@@ -16,8 +16,18 @@ export type { Instrument, InstrumentDef } from "./types";
 
 /** Registry of all pitched instruments. Add a sound = add a file + an entry. */
 const DEFS: InstrumentDef[] = [
-  lead, keys, bass, pluck, pad, saw,
-  fmlead, amlead, monobass, fmbass, fmkeys, ampad,
+  lead,
+  keys,
+  bass,
+  pluck,
+  pad,
+  saw,
+  fmlead,
+  amlead,
+  monobass,
+  fmbass,
+  fmkeys,
+  ampad,
 ];
 
 const byId = new Map(DEFS.map((d) => [d.id, d]));
@@ -40,10 +50,4 @@ export function getInstrument(id: string): Instrument {
 /** Human-readable label for an instrument id (falls back to the id itself). */
 export function getInstrumentLabel(id: string): string {
   return byId.get(id)?.label ?? id;
-}
-
-/** Dispose all created instruments (e.g. on teardown). */
-export function disposeInstruments(): void {
-  for (const inst of live.values()) inst.dispose();
-  live.clear();
 }

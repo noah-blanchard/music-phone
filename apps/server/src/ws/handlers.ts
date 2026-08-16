@@ -1,52 +1,61 @@
 import { parseClientMessage } from "@musicphone/shared";
-import type { RoomManager } from "../game/room-store";
+import type { Command } from "../game/commands";
 
 /**
- * Dispatch a raw inbound WebSocket payload to the appropriate manager action.
- * `raw` may arrive as a string (default) or pre-parsed object depending on the
- * Elysia message schema; both are handled.
+ * Turn a raw inbound WebSocket payload into a command.
+ *
+ * `playerId` comes from the connection, never from the message body, so a
+ * client cannot act on another player's behalf by claiming their id.
+ *
+ * Returns null for anything unparseable, which the caller drops silently — a
+ * malformed frame is not worth a round trip. `raw` may arrive as a string or as
+ * an already-parsed object depending on the socket's schema; both are handled.
  */
-export function handleClientMessage(
-  manager: RoomManager,
-  code: string,
-  playerId: string,
-  raw: unknown,
-): void {
+export function toCommand(raw: unknown, playerId: string): Command | null {
   let data: unknown = raw;
   if (typeof raw === "string") {
     try {
       data = JSON.parse(raw);
     } catch {
-      return;
+      return null;
     }
   }
 
-  const msg = parseClientMessage(data);
-  if (!msg) return;
+  const message = parseClientMessage(data);
+  if (!message) return null;
 
-  switch (msg.type) {
-    case "game:start": {
-      const error = manager.startGame(code, playerId);
-      if (error) manager.send(code, playerId, { type: "error", code: "start_failed", message: error });
-      break;
-    }
+  switch (message.type) {
+    case "game:start":
+      return { type: "game:start", playerId };
     case "config:update":
-      manager.updateConfig(code, playerId, msg.config);
-      break;
+      return { type: "config:update", playerId, config: message.config };
     case "turn:autosave":
-      manager.autosave(code, playerId, msg.notes, msg.instrumentId);
-      break;
+      return {
+        type: "turn:autosave",
+        playerId,
+        notes: message.notes,
+        instrumentId: message.instrumentId,
+      };
     case "turn:submit":
-      manager.submit(code, playerId, msg.notes, msg.instrumentId);
-      break;
+      return {
+        type: "turn:submit",
+        playerId,
+        notes: message.notes,
+        instrumentId: message.instrumentId,
+      };
     case "player:ready":
-      manager.setReady(code, playerId, msg.ready);
-      break;
+      return { type: "player:ready", playerId, ready: message.ready };
+    case "turn:reroll":
+      return { type: "turn:reroll", playerId };
     case "reveal:update":
-      manager.setReveal(code, playerId, msg.activeSong, msg.revealedLayers, msg.playing);
-      break;
+      return {
+        type: "reveal:update",
+        playerId,
+        activeSong: message.activeSong,
+        revealedLayers: message.revealedLayers,
+        playing: message.playing,
+      };
     case "room:leave":
-      manager.leave(code, playerId);
-      break;
+      return { type: "player:left", playerId };
   }
 }

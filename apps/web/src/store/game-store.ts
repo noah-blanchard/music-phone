@@ -3,7 +3,6 @@ import type {
   ClientMessage,
   GameConfig,
   Layer,
-  Melody,
   Note,
   Role,
   RoomSnapshot,
@@ -11,10 +10,7 @@ import type {
   ServerMessage,
 } from "@musicphone/shared";
 import { wsUrl } from "@/lib/eden";
-
-function randomFrom<T>(arr: readonly T[]): T | undefined {
-  return arr[Math.floor(Math.random() * arr.length)];
-}
+import { MAX_RETRIES, retryDelay } from "@/lib/retry";
 
 /** Per-song musical params handed to the local player this round. */
 export interface SongParams {
@@ -23,11 +19,19 @@ export interface SongParams {
   scale: ScaleType;
 }
 
+/** How the socket is currently doing, for the connection indicator. */
+export type ConnectionStatus = "connecting" | "online" | "reconnecting" | "ended";
+
+/**
+ * Errors that make retrying pointless: the room is gone, this player is not in
+ * it, or the origin is refused. Reconnecting cannot fix any of them.
+ */
+const FATAL_ERROR_CODES = new Set(["join_failed", "forbidden_origin"]);
+
 /**
  * Single source of client state. Owns the WebSocket (kept outside React state
  * to avoid re-render churn) and exposes typed actions that send ClientMessages.
  */
-
 interface GameState {
   snapshot: RoomSnapshot | null;
   /** Read-only prior layers handed to the local player. */
@@ -38,21 +42,18 @@ interface GameState {
   currentSong: SongParams | null;
   /** Whether this round's song is empty (round 0 → slot machine). */
   isFirstLayer: boolean;
-  /** Chosen sound id (instrument or kit) for the current layer. */
+  /** The sound the server rolled for this layer. */
   selectedInstrument: string;
+  /** Re-rolls of that sound left this round, as the server counts them. */
+  rerollsLeft: number;
   /** Whether the local player unlocked out-of-scale placement this round. */
   pitchUnlocked: boolean;
-  /** Whether the local player has submitted the current round. */
-  submitted: boolean;
-  /** Rerolls left for the rolled instrument this round (starts at 1). */
-  rerollsLeft: number;
-  /** Finished songs, populated on game:finished. */
-  finishedMelodies: Melody[];
   /** Local, editable notes for the current turn. */
   draft: Note[];
+  status: ConnectionStatus;
   connected: boolean;
   error: string | null;
-  /** Increments on each round:started — drives the countdown overlay. */
+  /** Increments on each genuinely new round — drives the intro overlay. */
   roundCue: number;
 
   connect: (code: string, playerId: string) => void;
@@ -60,25 +61,33 @@ interface GameState {
 
   setDraft: (notes: Note[]) => void;
   clearDraft: () => void;
-  /** Reroll the rolled instrument (once per round) from the kit's pool. */
+  /** Ask the server for a different sound (limited per round). */
   rerollInstrument: () => void;
   setPitchUnlocked: (unlocked: boolean) => void;
+  dismissError: () => void;
 
   startGame: () => void;
   updateConfig: (patch: Partial<GameConfig>) => void;
   setReady: (ready: boolean) => void;
   submitTurn: () => void;
-  /** Drive the room-wide guided reveal (active song's author only). */
+  /** Drive the room-wide guided reveal (whoever the server puts in charge). */
   setReveal: (activeSong: number, revealedLayers: number, playing: boolean) => void;
 }
 
 let socket: WebSocket | null = null;
 let autosaveTimer: ReturnType<typeof setTimeout> | null = null;
+let retryTimer: ReturnType<typeof setTimeout> | null = null;
+let retryAttempt = 0;
 let intentionalClose = false;
 let reconnectArgs: { code: string; playerId: string } | null = null;
 
 function send(msg: ClientMessage): void {
   if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify(msg));
+}
+
+function clearRetry(): void {
+  if (retryTimer) clearTimeout(retryTimer);
+  retryTimer = null;
 }
 
 export const useGameStore = create<GameState>((set, get) => ({
@@ -88,11 +97,10 @@ export const useGameStore = create<GameState>((set, get) => ({
   currentSong: null,
   isFirstLayer: false,
   selectedInstrument: "",
+  rerollsLeft: 0,
   pitchUnlocked: false,
-  submitted: false,
-  rerollsLeft: 1,
-  finishedMelodies: [],
   draft: [],
+  status: "connecting",
   connected: false,
   error: null,
   roundCue: 0,
@@ -100,36 +108,51 @@ export const useGameStore = create<GameState>((set, get) => ({
   connect: (code, playerId) => {
     intentionalClose = false;
     reconnectArgs = { code, playerId };
+    clearRetry();
     if (socket) socket.close();
 
-    const ws = new WebSocket(`${wsUrl()}/ws?code=${encodeURIComponent(code)}&playerId=${encodeURIComponent(playerId)}`);
+    const ws = new WebSocket(
+      `${wsUrl()}/ws?code=${encodeURIComponent(code)}&playerId=${encodeURIComponent(playerId)}`,
+    );
     socket = ws;
 
     // Guard every handler with `socket === ws`: in React StrictMode the effect
-    // mounts twice, so a stale socket can emit events after it has been replaced.
-    // Only the currently active socket is allowed to mutate state or reconnect.
+    // mounts twice, so a stale socket can emit events after it has been
+    // replaced. Only the currently active socket may touch state or reconnect.
     ws.onopen = () => {
-      if (socket === ws) set({ connected: true, error: null });
+      if (socket !== ws) return;
+      retryAttempt = 0;
+      set({ connected: true, status: "online", error: null });
     };
+
     ws.onclose = () => {
       if (socket !== ws) return;
       set({ connected: false });
-      if (!intentionalClose && reconnectArgs) {
-        const args = reconnectArgs;
-        setTimeout(() => {
-          if (socket === ws && reconnectArgs) get().connect(args.code, args.playerId);
-        }, 1500);
+      if (intentionalClose || !reconnectArgs) return;
+
+      if (retryAttempt >= MAX_RETRIES) {
+        set({ status: "ended", error: "Lost contact with the server. Reload to rejoin." });
+        return;
       }
+
+      const args = reconnectArgs;
+      const delay = retryDelay(retryAttempt);
+      retryAttempt += 1;
+      set({ status: "reconnecting" });
+      retryTimer = setTimeout(() => {
+        if (socket === ws && reconnectArgs) get().connect(args.code, args.playerId);
+      }, delay);
     };
+
     ws.onmessage = (event) => {
       if (socket !== ws) return;
       let msg: ServerMessage;
       try {
-        msg = JSON.parse(event.data) as ServerMessage;
+        msg = JSON.parse(event.data as string) as ServerMessage;
       } catch {
         return;
       }
-      dispatch(msg, set, get);
+      dispatch(msg, set);
     };
   },
 
@@ -141,50 +164,45 @@ export const useGameStore = create<GameState>((set, get) => ({
   disconnect: () => {
     intentionalClose = true;
     reconnectArgs = null;
+    retryAttempt = 0;
+    clearRetry();
     socket?.close();
     socket = null;
     set({
       snapshot: null,
       connected: false,
+      status: "connecting",
       draft: [],
       contextLayers: [],
       currentRole: null,
       currentSong: null,
-      finishedMelodies: [],
     });
   },
 
   setDraft: (notes) => {
     set({ draft: notes });
     if (autosaveTimer) clearTimeout(autosaveTimer);
-    autosaveTimer = setTimeout(
-      () => send({ type: "turn:autosave", notes: get().draft, instrumentId: get().selectedInstrument }),
-      600,
-    );
+    autosaveTimer = setTimeout(() => send({ type: "turn:autosave", notes: get().draft }), 600);
   },
 
   clearDraft: () => {
     set({ draft: [] });
-    send({ type: "turn:autosave", notes: [], instrumentId: get().selectedInstrument });
+    send({ type: "turn:autosave", notes: [] });
   },
 
-  rerollInstrument: () => {
-    const { rerollsLeft, currentRole, selectedInstrument } = get();
-    if (rerollsLeft <= 0 || !currentRole) return;
-    const others = currentRole.instruments.filter((id) => id !== selectedInstrument);
-    const next = randomFrom(others.length ? others : currentRole.instruments) ?? selectedInstrument;
-    set({ selectedInstrument: next, rerollsLeft: rerollsLeft - 1 });
-    send({ type: "turn:autosave", notes: get().draft, instrumentId: next });
-  },
+  // The server owns both the sound and the re-roll budget, so this only asks;
+  // the answer comes back as turn:state.
+  rerollInstrument: () => send({ type: "turn:reroll" }),
+
   setPitchUnlocked: (pitchUnlocked) => set({ pitchUnlocked }),
+  dismissError: () => set({ error: null }),
 
   startGame: () => send({ type: "game:start" }),
   updateConfig: (config) => send({ type: "config:update", config }),
   setReady: (ready) => send({ type: "player:ready", ready }),
   submitTurn: () => {
-    send({ type: "turn:submit", notes: get().draft, instrumentId: get().selectedInstrument });
+    send({ type: "turn:submit", notes: get().draft });
     send({ type: "player:ready", ready: true });
-    set({ submitted: true });
   },
   setReveal: (activeSong, revealedLayers, playing) =>
     send({ type: "reveal:update", activeSong, revealedLayers, playing }),
@@ -193,37 +211,51 @@ export const useGameStore = create<GameState>((set, get) => ({
 function dispatch(
   msg: ServerMessage,
   set: (partial: Partial<GameState> | ((s: GameState) => Partial<GameState>)) => void,
-  get: () => GameState,
 ): void {
   switch (msg.type) {
     case "room:snapshot":
       set({ snapshot: msg.room });
-      if (msg.room.phase === "results") set({ finishedMelodies: msg.room.melodies });
       break;
+
     case "round:started":
-      // A new turn begins: load the read-only context, clear local work, reset
-      // per-round UI state, and bump the cue so the countdown overlay fires.
       set((s) => ({
         contextLayers: msg.contextLayers,
         currentRole: msg.role,
         currentSong: msg.song,
         isFirstLayer: msg.isFirstLayer,
-        selectedInstrument: randomFrom(msg.role.instruments) ?? "",
-        rerollsLeft: 1,
-        pitchUnlocked: false,
-        submitted: false,
-        draft: [],
-        roundCue: s.roundCue + 1,
+        selectedInstrument: msg.instrumentId,
+        rerollsLeft: msg.rerollsLeft,
+        // The server hands back whatever it last autosaved for this player, so
+        // a dropped connection costs them nothing.
+        draft: msg.draft,
+        // Only a genuinely new round resets the editing aids and replays the
+        // intro. Resuming must not blank someone's work, nor make them sit
+        // through the wheel and countdown a second time.
+        pitchUnlocked: msg.resumed ? s.pitchUnlocked : false,
+        roundCue: msg.resumed ? s.roundCue : s.roundCue + 1,
       }));
       break;
+
+    case "turn:state":
+      set({ selectedInstrument: msg.instrumentId, rerollsLeft: msg.rerollsLeft });
+      break;
+
+    // Both are announcements: the snapshot that follows carries the state the
+    // views actually render from.
     case "round:ended":
-      break;
     case "game:finished":
-      set({ finishedMelodies: msg.melodies });
       break;
+
     case "error":
-      set({ error: msg.message });
+      // A fatal error means retrying cannot help; stop and say so plainly.
+      if (FATAL_ERROR_CODES.has(msg.code)) {
+        intentionalClose = true;
+        reconnectArgs = null;
+        clearRetry();
+        set({ status: "ended", error: msg.message });
+      } else {
+        set({ error: msg.message });
+      }
       break;
   }
-  void get;
 }

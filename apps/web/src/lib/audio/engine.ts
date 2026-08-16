@@ -1,5 +1,11 @@
 import * as Tone from "tone";
-import { getRole, midiToToneNote, roleDefaultSound, type Layer, type Note } from "@musicphone/shared";
+import {
+  getRole,
+  midiToToneNote,
+  roleDefaultSound,
+  type Layer,
+  type Note,
+} from "@musicphone/shared";
 import { getInstrument } from "./instruments";
 import { getDrumKitVoices } from "./drums";
 
@@ -41,21 +47,57 @@ export interface PlayHandle {
   stop: () => void;
 }
 
+export interface PlayCallbacks {
+  onStep?: (step: number) => void;
+  /** Playback reached the end of a non-looping pass. */
+  onEnd?: () => void;
+  /**
+   * Playback was cut short because something else took the transport. The
+   * caller's own `stop()` does not fire this — it already knows.
+   */
+  onStopped?: () => void;
+  loop?: boolean;
+}
+
+interface TransportOwner {
+  teardown: () => void;
+  onStopped: (() => void) | undefined;
+}
+
+/**
+ * Tone's transport is a singleton, so only one playback may own it at a time.
+ * Tracking the owner is what lets a new `playLayers` evict the previous one
+ * *and tell it* — without this, starting one song in the results screen
+ * silently killed another whose button carried on showing "■".
+ */
+let owner: TransportOwner | null = null;
+
+function release(notify: boolean): void {
+  const previous = owner;
+  owner = null;
+  if (!previous) return;
+  previous.teardown();
+  if (notify) previous.onStopped?.();
+}
+
 /**
  * Schedule and play stacked layers. Each layer resolves its own
  * instrument from its role (drum lanes for drum roles), and all layers play
  * simultaneously over the same `totalSteps`-long loop. When `loop` is true the
  * loop repeats and `onEnd` never fires; otherwise it plays once.
+ *
+ * Starting playback stops whatever was playing before it.
  */
 export function playLayers(
   layers: Layer[],
   bpm: number,
   totalSteps: number,
-  callbacks: { onStep?: (step: number) => void; onEnd?: () => void; loop?: boolean } = {},
+  callbacks: PlayCallbacks = {},
 ): PlayHandle {
   const dt = stepSeconds(bpm);
   const loopEnd = totalSteps * dt;
 
+  release(true);
   Tone.getTransport().stop();
   Tone.getTransport().cancel();
   Tone.getTransport().position = 0;
@@ -105,17 +147,27 @@ export function playLayers(
 
   Tone.getTransport().start();
 
-  const stop = () => {
-    for (const p of parts) {
-      p.stop();
-      p.dispose();
-    }
-    cursor.stop();
-    cursor.dispose();
-    if (endId >= 0) Tone.getTransport().clear(endId);
-    Tone.getTransport().stop();
-    Tone.getTransport().cancel();
+  const self: TransportOwner = {
+    onStopped: callbacks.onStopped,
+    teardown: () => {
+      for (const p of parts) {
+        p.stop();
+        p.dispose();
+      }
+      cursor.stop();
+      cursor.dispose();
+      if (endId >= 0) Tone.getTransport().clear(endId);
+      Tone.getTransport().stop();
+      Tone.getTransport().cancel();
+    },
   };
+  owner = self;
 
-  return { stop };
+  // A handle that no longer owns the transport must not tear down the playback
+  // that replaced it, so stopping late is a no-op rather than a hijack.
+  return {
+    stop: () => {
+      if (owner === self) release(false);
+    },
+  };
 }

@@ -1,0 +1,8 @@
+# Normalize line endings to LF in the repository. Development happens on
+# Windows while CI runs on Ubuntu, and Prettier is configured with the default
+# `endOfLine: "lf"` — without this, `prettier --check` disagrees across
+# platforms and every checkout produces phantom whole-file diffs.
+* text=auto eol=lf
+
+# Lockfiles and generated output should never be diffed or merged by hand.
+bun.lock -diff linguist-generated

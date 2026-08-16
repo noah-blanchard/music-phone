@@ -1,4 +1,4 @@
-import type { Room, RoomSnapshot } from "@musicphone/shared";
+import { canControlReveal, type Room, type RoomSnapshot } from "@musicphone/shared";
 
 /**
  * Produce the client-facing view of a room. Melodies are withheld until the
@@ -21,5 +21,14 @@ export function toSnapshot(room: Room, selfId: string): RoomSnapshot {
     assignments: room.assignments,
     wheelOffsetDeg: room.wheelOffsetDeg,
     reveal: room.reveal,
+    canControlReveal:
+      room.phase === "results" &&
+      canControlReveal(
+        room.reveal,
+        room.players,
+        room.hostId,
+        room.melodies[room.reveal.activeSong]?.seedPlayerId,
+        selfId,
+      ),
   };
 }

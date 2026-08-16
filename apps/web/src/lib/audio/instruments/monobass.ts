@@ -10,7 +10,14 @@ export const monobass: InstrumentDef = {
       oscillator: { type: "sawtooth" },
       filter: { Q: 2, type: "lowpass", rolloff: -24 },
       envelope: { attack: 0.01, decay: 0.2, sustain: 0.6, release: 0.2 },
-      filterEnvelope: { attack: 0.01, decay: 0.2, sustain: 0.3, release: 0.2, baseFrequency: 120, octaves: 3 },
+      filterEnvelope: {
+        attack: 0.01,
+        decay: 0.2,
+        sustain: 0.3,
+        release: 0.2,
+        baseFrequency: 120,
+        octaves: 3,
+      },
       volume: -10,
     }).toDestination();
     return {

@@ -1,8 +1,14 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { motion, useReducedMotion } from "motion/react";
-import { BPM_CHOICES, KEY_CHOICES, SCALE_CHOICES, SCALE_LABELS, noteLabel } from "@musicphone/shared";
+import {
+  BPM_CHOICES,
+  KEY_CHOICES,
+  SCALE_CHOICES,
+  SCALE_LABELS,
+  noteLabel,
+} from "@musicphone/shared";
 
 interface Props {
   song: { bpm: number; root: number; scale: (typeof SCALE_CHOICES)[number] };
@@ -40,7 +46,11 @@ function Reel({
         <motion.div
           initial={{ y: 0 }}
           animate={{ y: finalY }}
-          transition={{ duration: reduce ? 0 : 1.6, delay: reduce ? 0 : delay, ease: [0.16, 1, 0.3, 1] }}
+          transition={{
+            duration: reduce ? 0 : 1.6,
+            delay: reduce ? 0 : delay,
+            ease: [0.16, 1, 0.3, 1],
+          }}
         >
           {strip.map((v, i) => (
             <div key={i} className="slot-item" style={{ height: ITEM_H }}>
@@ -60,11 +70,18 @@ function Reel({
 export function SlotMachine({ song, onDone }: Props) {
   const reduce = !!useReducedMotion();
 
+  // Latest-callback ref, for the same reason as the wheel: the reels must spin
+  // once, not restart whenever the parent re-renders.
+  const onDoneRef = useRef(onDone);
+  useEffect(() => {
+    onDoneRef.current = onDone;
+  }, [onDone]);
+
   useEffect(() => {
     const total = reduce ? 600 : 1600 + 2 * 500 + 900; // last reel delay + spin + hold
-    const t = setTimeout(onDone, total);
+    const t = setTimeout(() => onDoneRef.current(), total);
     return () => clearTimeout(t);
-  }, [reduce, onDone]);
+  }, [reduce]);
 
   return (
     <div className="slot-wrap">

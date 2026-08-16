@@ -39,21 +39,29 @@ export function RoundOverlay() {
     at(tick * 4, () => setStage(null));
   }, [reduce]);
 
-  const hasIntro =
-    !!snapshot && Object.keys(snapshot.assignments).length > 0 && !!currentSong;
+  const hasIntro = !!snapshot && Object.keys(snapshot.assignments).length > 0 && !!currentSong;
+
+  // The intro is driven by roundCue and nothing else. Everything else it needs
+  // is read through a ref at the moment it fires, because depending on the
+  // snapshot would restart the whole ceremony on every unrelated update — one
+  // player toggling ready was enough to replay it.
+  const latest = useRef({ round: 0, hasIntro, beginCountdown, reduce });
+  useEffect(() => {
+    latest.current = { round: snapshot?.round ?? 0, hasIntro, beginCountdown, reduce };
+  });
 
   useEffect(() => {
-    if (roundCue === 0 || !snapshot) return;
+    if (roundCue === 0) return;
+    const { round, hasIntro: intro, beginCountdown: begin, reduce: reduced } = latest.current;
     clearAll();
-    if (snapshot.round === 0 && hasIntro) {
+    if (round === 0 && intro) {
       setStage("wheel"); // → slot → countdown, via child onDone callbacks
     } else {
       setStage("splash");
-      timeouts.current.push(setTimeout(beginCountdown, reduce ? 250 : 1100));
+      timeouts.current.push(setTimeout(begin, reduced ? 250 : 1100));
     }
     return clearAll;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roundCue]);
+  }, [roundCue, clearAll]);
 
   if (!snapshot) return null;
   const round = snapshot.round + 1;
