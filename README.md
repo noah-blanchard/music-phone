@@ -3,8 +3,8 @@
 MusicPhone is a real-time multiplayer music game: **Gartic Phone, but with looped songs**.
 
 Each player receives a musical kit, starts one song, and then rotates through every other
-player's song. On each turn they add a new layerâ€”drums, bass, lead, keys, pad, or another
-selected roleâ€”without necessarily seeing the full arrangement. When every rotation is
+player's song. On each turn they add a new layer—drums, bass, lead, keys, pad, or another
+selected role—without necessarily seeing the full arrangement. When every rotation is
 complete, the room reveals each finished song one layer at a time.
 
 The project is designed as a game first, not a full digital audio workstation. Musical
@@ -33,14 +33,14 @@ song exactly once, each final arrangement receives every assigned role exactly o
 ## Features
 
 - Anonymous rooms with short shareable codes
-- 2â€“8 players with live presence and host controls
+- 2–8 players with live presence and host controls
 - Piano-roll and drum-grid editors at 16th-note resolution
 - Eight selectable roles: drums, lead, synth, bass, pluck, pad, keys, and stab
 - Twelve synthesized instruments and three drum kits
 - Per-song BPM, key, and scale chosen by the server
 - Scale-locked composition with an optional chromatic unlock
 - Three context modes: previous layer, full arrangement, or blind
-- Configurable 2â€“8 bar loops and 1â€“5 minute rounds in the current interface
+- Configurable 2–8 bar loops and 1–5 minute rounds in the current interface
 - One server-controlled sound reroll per player and round
 - Debounced draft autosave and automatic WebSocket reconnection
 - Server-authoritative timers, assignments, validation, and reveal state
@@ -115,7 +115,7 @@ Keeping game rules and protocol types shared prevents the client and server from
 ### Persistence and recovery
 
 Without `REDIS_URL`, the server uses an in-memory store suitable for development. With Redis,
-the complete serializable roomâ€”including current drafts and absolute round deadlinesâ€”survives
+the complete serializable room—including current drafts and absolute round deadlines—survives
 a server restart.
 
 On startup, the server clears stale connection flags and restores timers. Reconnecting players
@@ -130,33 +130,33 @@ and transient network changes.
 
 ```text
 music-phone/
-â”œâ”€â”€ apps/
-â”‚   â”œâ”€â”€ web/                 Next.js UI, Zustand store, editors, and Tone.js audio
-â”‚   â””â”€â”€ server/              Elysia HTTP/WebSocket server and game runtime
-â”œâ”€â”€ packages/
-â”‚   â””â”€â”€ shared/              Domain types, messages, validation, modes, and music helpers
-â”œâ”€â”€ docker-compose.local.yml Production-like local stack with web, server, and Redis
-â”œâ”€â”€ DEPLOYMENT.md            Dokploy/VPS deployment guide
-â”œâ”€â”€ package.json             Bun workspace scripts
-â””â”€â”€ vitest.config.ts         Shared, server, and framework-free web test projects
+├── apps/
+│   ├── web/                 Next.js UI, Zustand store, editors, and Tone.js audio
+│   └── server/              Elysia HTTP/WebSocket server and game runtime
+├── packages/
+│   └── shared/              Domain types, messages, validation, modes, and music helpers
+├── docker-compose.local.yml Production-like local stack with web, server, and Redis
+├── DEPLOYMENT.md            Dokploy/VPS deployment guide
+├── package.json             Bun workspace scripts
+└── vitest.config.ts         Shared, server, and framework-free web test projects
 ```
 
 Important server boundaries:
 
 ```text
 apps/server/src/
-â”œâ”€â”€ game/
-â”‚   â”œâ”€â”€ create.ts            Pure room creation and joining
-â”‚   â”œâ”€â”€ commands.ts          All room-changing intents
-â”‚   â”œâ”€â”€ reducer.ts           Pure game state machine
-â”‚   â”œâ”€â”€ effects.ts           Side effects requested by the reducer
-â”‚   â””â”€â”€ serialize.ts         Per-player sanitized snapshots
-â”œâ”€â”€ runtime/
-â”‚   â”œâ”€â”€ room-service.ts      Load â†’ reduce â†’ save â†’ effects orchestration
-â”‚   â”œâ”€â”€ store/               Memory and Redis RoomStore implementations
-â”‚   â”œâ”€â”€ scheduler/           Round, grace, and cleanup timers
-â”‚   â””â”€â”€ connections.ts       Live WebSocket delivery bus
-â””â”€â”€ ws/handlers.ts           Untrusted payload parsing and command mapping
+├── game/
+│   ├── create.ts            Pure room creation and joining
+│   ├── commands.ts          All room-changing intents
+│   ├── reducer.ts           Pure game state machine
+│   ├── effects.ts           Side effects requested by the reducer
+│   └── serialize.ts         Per-player sanitized snapshots
+├── runtime/
+│   ├── room-service.ts      Load → reduce → save → effects orchestration
+│   ├── store/               Memory and Redis RoomStore implementations
+│   ├── scheduler/           Round, grace, and cleanup timers
+│   └── connections.ts       Live WebSocket delivery bus
+└── ws/handlers.ts           Untrusted payload parsing and command mapping
 ```
 
 ## Technology
@@ -234,7 +234,7 @@ the web image rather than restarting it.
 | `GET` | `/health` | Server health check |
 | `POST` | `/rooms` | Create a room and return its code and host player ID |
 | `POST` | `/rooms/:code/join` | Join a lobby and return the player's ID |
-| `WS` | `/ws?code=â€¦&playerId=â€¦` | Realtime room connection and reconnect identity |
+| `WS` | `/ws?code=…&playerId=…` | Realtime room connection and reconnect identity |
 
 Client WebSocket intents cover configuration, game start, autosave, submission, readiness,
 sound rerolls, reveal control, and leaving. Server messages provide per-player snapshots, round
